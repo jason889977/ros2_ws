@@ -1,0 +1,18 @@
+# ROS 2 colcon build artifacts
+build/
+install/
+log/
+
+# Common temporary files
+*.log
+*.tmp
+*.swp
+*.swo
+*~
+
+# Python cache
+__pycache__/
+*.pyc
+
+# VS Code local state
+.vscode/

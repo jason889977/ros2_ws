@@ -1,0 +1,9 @@
+# Balanced tuned v2 profile for basler acA2500-14GC (S/N: 22297681)
+/**:
+  ros__parameters:
+    camera_frame: basler_aca2500_106611_18
+    device_user_id: "106611-18"
+    frame_rate: 8.0
+    grab_timeout: 1500
+    mtu_size: 1500
+    inter_pkg_delay: 1000

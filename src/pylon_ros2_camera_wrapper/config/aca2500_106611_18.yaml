@@ -1,0 +1,8 @@
+# Camera profile for basler acA2500-14GC (S/N: 22297681)
+/**:
+  ros__parameters:
+    camera_frame: basler_aca2500_106611_18
+    device_user_id: "106611-18"
+    frame_rate: 14.0
+    grab_timeout: 1000
+    mtu_size: 1500

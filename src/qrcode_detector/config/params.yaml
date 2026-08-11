@@ -1,0 +1,14 @@
+# qrcode_detector 参数配置文件
+# 用法: ros2 launch qrcode_detector qrcode_detector.launch.py --params-file config/params.yaml
+
+/**:
+  ros__parameters:
+    # Basler 相机发布的图像话题名称
+    # 使用 `ros2 topic list` 查看实际话题名
+    image_topic: "/camera/image_raw"
+
+    # WeChatQR 模型文件目录（留空则使用功能包内默认 models/ 路径）
+    model_dir: ""
+
+    # 图像订阅队列大小
+    queue_size: 10
