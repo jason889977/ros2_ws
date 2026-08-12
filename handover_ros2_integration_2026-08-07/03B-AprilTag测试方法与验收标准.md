@@ -18,17 +18,16 @@
 - 标签信息（family/id）:
 - 场景说明:
 
-自动验收入口（推荐）:
+手动验收入口（推荐）:
+
+1. 先按本文件测试项 A-D 逐项执行并记录结果。
+2. 执行测试项 E（RViz2 可视化）确认位姿显示正常。
+3. 追加关键错误守门检查:
 
 ```bash
-cd /home/ubuntu/ros2_ws
-./scripts/acceptance_camera_apriltag.sh --window 30 --enable-rviz true
+latest=$(ls -1t /home/ubuntu/.ros/log/pylon_ros2_camera_wrapper_*.log | head -n 1)
+grep -E "3774873620|incompletely grabbed|Grab was not successful" -i "$latest" || true
 ```
-
-说明:
-- 脚本将执行 A-F 六项验收并输出 Markdown/JSON 报告。
-- 报告默认路径: /home/ubuntu/ros2_ws/log/acceptance/
-- `tag_family` 既可用 `36h11` 也可用 `tag36h11`，系统会自动规范化。
 
 ## 3. 测试项 A: ROS 图谱连通
 

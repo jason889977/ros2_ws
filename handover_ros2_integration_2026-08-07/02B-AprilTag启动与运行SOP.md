@@ -97,39 +97,20 @@ ros2 run tf2_ros tf2_echo <header.frame_id> <child_frame_id>
 CAMERA_MODE=restart /home/ubuntu/ros2_ws/scripts/deploy_and_run_camera_apriltag.sh
 ```
 
-## 6. 一键全功能自动验收（推荐）
+## 6. 手动验收（推荐）
 
-当需要在真实相机上做一次性完整验收（A-F）时，直接运行:
+当需要在真实相机上做一次性完整验收（A-F）时，请按以下顺序执行:
+
+1. 执行 [03B-AprilTag测试方法与验收标准.md](03B-AprilTag测试方法与验收标准.md) 的测试项 A-D。
+2. 启动 RViz2，确认标签姿态与 TF2 连通。
+3. 检查最新相机日志中是否出现关键错误码（3774873620 / incompletely grabbed / Grab was not successful）。
+
+关键日志检查命令:
 
 ```bash
-cd /home/ubuntu/ros2_ws
-./scripts/acceptance_camera_apriltag.sh \
-  --window 30 \
-  --enable-rviz true \
-  --keep-alive false
+latest=$(ls -1t /home/ubuntu/.ros/log/pylon_ros2_camera_wrapper_*.log | head -n 1)
+grep -E "3774873620|incompletely grabbed|Grab was not successful" -i "$latest" || true
 ```
-
-验收覆盖项:
-
-- A: 相机图像链路（image_raw / camera_info）
-- B: AprilTag detections
-- C: 6D 位姿话题（/apriltag/pose 与 /apriltag/transform）
-- D: TF2 变换验证（自动从 transform 提取父子 frame）
-- E: RViz2 启动可用性
-- F: 关键错误码守门（3774873620 / incompletely grabbed / Grab was not successful）
-
-报告输出位置:
-
-- Markdown: /home/ubuntu/ros2_ws/log/acceptance/apriltag_acceptance_*.md
-- JSON: /home/ubuntu/ros2_ws/log/acceptance/apriltag_acceptance_*.json
-
-常用参数:
-
-- `--camera-id <id>`: 指定相机命名空间
-- `--camera-config <path>`: 指定相机配置文件
-- `--window <seconds>`: 验收窗口时长
-- `--enable-rviz <true|false>`: 是否执行 RViz2 检查
-- `--keep-alive <true|false>`: 验收后是否保留相机/AprilTag进程
 
 ## 7. 可选: RViz2 查看标签三维位置
 

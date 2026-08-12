@@ -119,22 +119,6 @@ if(BUILD_TESTING)
     EXECUTABLE test_grab_images_action_client
   )
 
-  add_library(action_client_test_grab_blaze_data SHARED
-    ${CMAKE_CURRENT_SOURCE_DIR}/test/test_grab_blaze_data_action_client.cpp
-  )
-
-  target_compile_definitions(action_client_test_grab_blaze_data
-    PRIVATE "TEST_GRAB_BLAZE_DATA_ACTION_CLIENT_BUILDING_DLL")
-
-  ament_target_dependencies(action_client_test_grab_blaze_data
-    ${CAMERA_TEST_DEPENDENCIES}
-  )
-
-  rclcpp_components_register_node(action_client_test_grab_blaze_data
-    PLUGIN "pylon_ros2_camera::TestGrabBlazeDataActionClient"
-    EXECUTABLE test_grab_blaze_data_action_client
-  )
-
   add_library(action_client_test_grab_image SHARED
     ${CMAKE_CURRENT_SOURCE_DIR}/test/test_grab_image_action_client.cpp
   )
@@ -154,7 +138,6 @@ if(BUILD_TESTING)
   install(TARGETS
         action_client_test_grab_images
         action_client_test_grab_image
-        action_client_test_grab_blaze_data
     ARCHIVE DESTINATION lib
     LIBRARY DESTINATION lib
     RUNTIME DESTINATION lib/${PROJECT_NAME}

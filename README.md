@@ -9,7 +9,6 @@
 - `src/qrcode_detector`: 二维码检测节点与模型
 - `src/apriltag_pose_reader`: AprilTag TF/姿态读取封装与 launch
 - `scripts`: 部署、迁移、RViz 启动等脚本
-- `docs`: 英文文档总览
 - `handover_ros2_integration_2026-08-07`: 中文交接与运行 SOP
 
 ## 环境要求
@@ -97,7 +96,6 @@ ros2 topic echo /apriltag/pose --once
 
 ## 文档入口
 
-- 英文文档总览：`docs/README.md`
 - 中文启动 SOP：`handover_ros2_integration_2026-08-07/02-启动与运行SOP.md`
 - Basler 安装说明：`BASLER_INSTALL_GUIDE.md`
 
