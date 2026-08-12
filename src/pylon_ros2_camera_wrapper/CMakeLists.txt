@@ -65,8 +65,13 @@ install(TARGETS
 	RUNTIME DESTINATION lib/${PROJECT_NAME}
 )
 
-install(DIRECTORY config
-		DESTINATION share/${PROJECT_NAME}
+# Install the runtime camera-profile and generated calibration YAML files
+# under the package share directory so package://pylon_ros2_camera_wrapper/config/... resolves.
+install(DIRECTORY config/
+		DESTINATION share/${PROJECT_NAME}/config
+		FILES_MATCHING
+		PATTERN "*.yaml"
+		PATTERN "*.yml"
 )
 
 install(DIRECTORY launch

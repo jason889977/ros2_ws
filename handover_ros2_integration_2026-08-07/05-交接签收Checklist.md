@@ -13,22 +13,28 @@
 - [ ] 已收到并确认 00-交接总览.md
 - [ ] 已收到并确认 01-文件与配置交接清单.md
 - [ ] 已收到并确认 02-启动与运行SOP.md
+- [ ] 已收到并确认 02A-二维码启动与运行SOP.md
+- [ ] 已收到并确认 02B-AprilTag启动与运行SOP.md
 - [ ] 已收到并确认 03-测试方法与验收标准.md
+- [ ] 已收到并确认 03A-二维码测试方法与验收标准.md
+- [ ] 已收到并确认 03B-AprilTag测试方法与验收标准.md
 - [ ] 已收到并确认 04-故障排查与回滚SOP.md
+- [ ] 已收到并确认 04A-二维码故障排查与回滚SOP.md
+- [ ] 已收到并确认 04B-AprilTag故障排查与回滚SOP.md
 - [ ] 已收到并确认 05-交接签收Checklist.md
 - [ ] 已收到并确认 06-组件与依赖安装详单.md
 
 ## 3. 启动签收
 
 - [ ] 已按 SOP 启动相机节点
-- [ ] 已按 SOP 启动二维码节点
-- [ ] 已确认 image_raw 发布与订阅连通
-- [ ] 已确认 decoded_info 可输出
+- [ ] 二维码链路: 已按 02A 启动并完成验证
+- [ ] AprilTag 链路: 已按 02B 启动并完成验证
 
 ## 4. 测试签收
 
 - [ ] 已完成图谱连通测试
-- [ ] 已完成结果可达测试
+- [ ] 二维码链路: 已按 03A 完成验收
+- [ ] AprilTag 链路: 已按 03B 完成验收
 - [ ] 已完成关键错误码守门检查
 - [ ] 已形成测试结论与记录
 
@@ -38,13 +44,16 @@
 - [ ] 已知回滚目标为 tuned.yaml
 - [ ] 已知 3774873620 为阻断级风险
 - [ ] 已知回滚后必须重做关键测试
+- [ ] 二维码链路: 已阅读 04A 并理解回滚流程
+- [ ] AprilTag 链路: 已阅读 04B 并理解回滚流程
 
 ## 6. 证据记录
 
 建议附上:
 - ros2 node list 输出截图或日志
 - ros2 topic info -v image_raw 输出
-- ros2 topic echo decoded_info 输出
+- 二维码: ros2 topic echo /wechat_qr_node/decoded_info 输出
+- AprilTag: /detections、/apriltag/pose、/apriltag/transform 输出
 - 错误码扫描输出
 
 ## 7. 最终结论

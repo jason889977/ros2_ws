@@ -77,6 +77,8 @@ sudo apt-get install -y \
     ros-$ROS_DISTRO-image-transport \
     ros-$ROS_DISTRO-camera-info-manager \
     ros-$ROS_DISTRO-cv-bridge \
+    ros-$ROS_DISTRO-apriltag-ros \
+    ros-$ROS_DISTRO-apriltag-msgs \
     ros-$ROS_DISTRO-launch \
     ros-$ROS_DISTRO-launch-ros
 
@@ -140,4 +142,7 @@ echo "   ros2 launch pylon_ros2_camera_wrapper pylon_ros2_camera.launch.py"
 echo ""
 echo "3. 启动二维码识别节点:"
 echo "   ros2 launch qrcode_detector qrcode_detector.launch.py"
+echo ""
+echo "4. 启动 AprilTag 检测和姿态读取:"
+echo "   ros2 launch apriltag_pose_reader apriltag_pose_reader.launch.py"
 echo ""

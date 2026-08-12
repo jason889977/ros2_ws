@@ -7,6 +7,7 @@
 - `src/pylon_ros2_camera_component`: Basler pylon 相机核心组件
 - `src/pylon_ros2_camera_wrapper`: 相机 ROS2 包装与 launch/config
 - `src/qrcode_detector`: 二维码检测节点与模型
+- `src/apriltag_pose_reader`: AprilTag TF/姿态读取封装与 launch
 - `scripts`: 部署、迁移、RViz 启动等脚本
 - `docs`: 英文文档总览
 - `handover_ros2_integration_2026-08-07`: 中文交接与运行 SOP
@@ -40,15 +41,55 @@ ros2 launch pylon_ros2_camera_wrapper pylon_ros2_camera.launch.py \
 ros2 launch qrcode_detector qrcode_detector.launch.py
 ```
 
-### 3. 验证链路
+也可以使用一键脚本（仅相机 + 二维码）：
+
+```bash
+# 默认复用已有相机节点
+./scripts/deploy_and_run_camera_qr.sh
+
+# 先自动停掉旧相机，再拉起新相机和二维码节点
+CAMERA_MODE=restart ./scripts/deploy_and_run_camera_qr.sh
+```
+
+### 3. 启动 AprilTag 姿态读取
+
+```bash
+ros2 launch apriltag_pose_reader apriltag_pose_reader.launch.py
+```
+
+也可以使用一键脚本（仅相机 + AprilTag）：
+
+```bash
+# 默认复用已有相机节点
+./scripts/deploy_and_run_camera_apriltag.sh
+
+# 先自动停掉旧相机，再拉起新相机和 AprilTag
+CAMERA_MODE=restart ./scripts/deploy_and_run_camera_apriltag.sh
+```
+
+默认会同时启动官方 `apriltag_ros` 检测节点，并把 TF 里的 AprilTag 姿态转成：
+
+- `/apriltag/pose`，类型为 `geometry_msgs/msg/PoseStamped`
+- `/apriltag/transform`，类型为 `geometry_msgs/msg/TransformStamped`
+
+如果你已经单独启动了官方 AprilTag 检测节点，可以把 `start_detector:=false`，只保留姿态读取器。
+
+如果日志出现 "The camera is not calibrated"，可执行一键标定并自动落盘：
+
+```bash
+./scripts/calibrate_basler_camera_and_apply.sh
+```
+
+### 4. 验证链路
 
 ```bash
 ros2 node list
 ros2 topic info -v /my_camera/pylon_ros2_camera_node/image_raw
 ros2 topic echo /wechat_qr_node/decoded_info --once
+ros2 topic echo /apriltag/pose --once
 ```
 
-### 4. 打开 RViz 查看图像
+### 5. 打开 RViz 查看图像
 
 ```bash
 /home/ubuntu/ros2_ws/scripts/open_camera_rviz.sh

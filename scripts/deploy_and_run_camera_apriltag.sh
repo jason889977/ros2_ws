@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# One-shot deploy and run helper for Basler camera + QR detector pipeline.
+# One-shot deploy and run helper for Basler camera + official AprilTag ROS + pose reader.
 # Camera mode:
 #   reuse   - reuse an already running pylon camera node if found (default)
 #   restart - stop old camera processes first, then launch a fresh camera node
@@ -13,9 +13,10 @@ CAMERA_MODE="${CAMERA_MODE:-reuse}"
 CAMERA_ID="${CAMERA_ID:-basler_106611_18}"
 CAMERA_CONFIG="$WORKSPACE_DIR/install/pylon_ros2_camera_wrapper/share/pylon_ros2_camera_wrapper/config/aca2500_106611_18.yaml"
 IMAGE_TOPIC=""
+CAM_INFO_TOPIC=""
 START_CAMERA=true
 CAM_LAUNCH_PID=""
-QR_LAUNCH_PID=""
+APRILTAG_LAUNCH_PID=""
 
 usage() {
   cat <<EOF
@@ -75,8 +76,8 @@ stop_existing_camera() {
 }
 
 cleanup() {
-  if [[ -n "$QR_LAUNCH_PID" ]] && kill -0 "$QR_LAUNCH_PID" 2>/dev/null; then
-    kill "$QR_LAUNCH_PID" || true
+  if [[ -n "$APRILTAG_LAUNCH_PID" ]] && kill -0 "$APRILTAG_LAUNCH_PID" 2>/dev/null; then
+    kill "$APRILTAG_LAUNCH_PID" || true
   fi
   if [[ -n "$CAM_LAUNCH_PID" ]] && kill -0 "$CAM_LAUNCH_PID" 2>/dev/null; then
     kill "$CAM_LAUNCH_PID" || true
@@ -101,7 +102,7 @@ source "$ROS_SETUP"
 set -u
 
 # Build required runtime packages to ensure config/scripts are installed.
-colcon build --packages-select pylon_ros2_camera_wrapper qrcode_detector --symlink-install
+colcon build --packages-select pylon_ros2_camera_wrapper apriltag_pose_reader --symlink-install
 
 if [[ ! -f "$WS_SETUP" ]]; then
   echo "[ERROR] Workspace setup not found after build: $WS_SETUP"
@@ -138,11 +139,13 @@ if [[ "$START_CAMERA" == true ]]; then
 fi
 
 IMAGE_TOPIC="/$CAMERA_ID/pylon_ros2_camera_node/image_raw"
+CAM_INFO_TOPIC="/$CAMERA_ID/pylon_ros2_camera_node/camera_info"
 
-echo "[INFO] Starting QR node..."
-ros2 launch qrcode_detector qrcode_detector.launch.py \
-  image_topic:="$IMAGE_TOPIC" &
-QR_LAUNCH_PID=$!
+echo "[INFO] Starting AprilTag detection and pose reader..."
+ros2 launch apriltag_pose_reader apriltag_pose_reader.launch.py \
+  image_topic:="$IMAGE_TOPIC" \
+  camera_info_topic:="$CAM_INFO_TOPIC" &
+APRILTAG_LAUNCH_PID=$!
 
 cat <<EOF
 
@@ -150,16 +153,15 @@ cat <<EOF
 - Camera mode: $CAMERA_MODE
 - Camera namespace: /$CAMERA_ID
 - Camera launch PID: ${CAM_LAUNCH_PID:-<reused-existing-node>}
-- QR launch PID: $QR_LAUNCH_PID
+- AprilTag launch PID: $APRILTAG_LAUNCH_PID
 
 Validation commands:
   source $ROS_SETUP
   source $WS_SETUP
-  ros2 topic list | grep -E "${CAMERA_ID}|decoded_info"
-  ros2 topic echo /wechat_qr_node/decoded_info
+  ros2 topic list | grep -E "${CAMERA_ID}|detections|apriltag"
+  ros2 topic echo /detections --once
+  ros2 topic echo /apriltag/pose --once
 
 To stop:
-  kill ${CAM_LAUNCH_PID:-} $QR_LAUNCH_PID
+  kill $CAM_LAUNCH_PID $APRILTAG_LAUNCH_PID
 EOF
-
-wait

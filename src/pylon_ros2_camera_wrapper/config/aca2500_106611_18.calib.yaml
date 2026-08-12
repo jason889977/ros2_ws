@@ -1,0 +1,26 @@
+# ROS camera calibration file for the Basler acA2500-14GC profile.
+#
+# This file uses the standard camera_calibration / CameraInfoManager schema so
+# package://pylon_ros2_camera_wrapper/config/aca2500_106611_18.calib.yaml can
+# be parsed at startup. Replace these placeholder values with the real
+# calibration output from the calibration helper when available.
+image_width: 1294
+image_height: 970
+camera_name: 106611_18
+camera_matrix:
+  rows: 3
+  cols: 3
+  data: [1.0, 0.0, 647.0, 0.0, 1.0, 485.0, 0.0, 0.0, 1.0]
+distortion_model: plumb_bob
+distortion_coefficients:
+  rows: 1
+  cols: 5
+  data: [0.0, 0.0, 0.0, 0.0, 0.0]
+rectification_matrix:
+  rows: 3
+  cols: 3
+  data: [1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0]
+projection_matrix:
+  rows: 3
+  cols: 4
+  data: [1.0, 0.0, 647.0, 0.0, 0.0, 1.0, 485.0, 0.0, 0.0, 0.0, 1.0, 0.0]

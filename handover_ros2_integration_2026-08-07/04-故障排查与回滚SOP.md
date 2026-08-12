@@ -1,60 +1,23 @@
-# 故障排查与回滚 SOP
+# 故障排查与回滚 SOP（公共入口）
 
-## 1. 排查总原则
+## 1. 目的
+
+二维码与 AprilTag 排障文档已拆分，避免在同一流程中混排两类业务问题。
+
+- 二维码专用排障: ./04A-二维码故障排查与回滚SOP.md
+- AprilTag 专用排障: ./04B-AprilTag故障排查与回滚SOP.md
+
+## 2. 公共排查总原则
 
 按顺序排查:
 1. 先看 ROS 图谱
-2. 再看 topic 发布与订阅
-3. 最后看日志与参数
+2. 再看业务关键话题
+3. 再看关键错误码
+4. 最后看参数与配置
 
-## 2. 场景A: 二维码节点进程在，但无 decoded_info
+## 3. 公共关键错误码守门
 
-现象:
-- qrcode_node 进程存在
-- /wechat_qr_node/decoded_info 无输出
-
-排查步骤:
-
-```bash
-cd /home/ubuntu/ros2_ws
-source /opt/ros/humble/setup.bash
-source install/setup.bash
-ros2 node list
-ros2 topic info -v /my_camera/pylon_ros2_camera_node/image_raw
-```
-
-判定:
-- 若 image_raw Publisher count = 0，先恢复相机启动
-- 若 Subscription count = 0，重启二维码节点
-
-恢复命令:
-
-```bash
-pkill -f "qrcode_node|qrcode_detector.launch.py" || true
-cd /home/ubuntu/ros2_ws
-source /opt/ros/humble/setup.bash
-source install/setup.bash
-ros2 launch qrcode_detector qrcode_detector.launch.py
-```
-
-## 3. 场景B: 只看到 wechat_qr_node，看不到相机节点
-
-现象:
-- ros2 node list 仅有 /wechat_qr_node
-
-处理:
-
-```bash
-cd /home/ubuntu/ros2_ws
-source /opt/ros/humble/setup.bash
-source install/setup.bash
-ros2 launch pylon_ros2_camera_wrapper pylon_ros2_camera.launch.py \
-  config_file:=/home/ubuntu/ros2_ws/src/pylon_ros2_camera_wrapper/config/aca2500_106611_18.tuned_v3.yaml
-```
-
-## 4. 场景C: 出现 3774873620 或抓取不完整错误
-
-快速扫描:
+快速扫描命令:
 
 ```bash
 latest=$(ls -1t /home/ubuntu/.ros/log/pylon_ros2_camera_wrapper_*.log | head -n 1)
@@ -64,31 +27,11 @@ grep -E "3774873620|incompletely grabbed|Grab was not successful" -i "$latest" |
 处理顺序:
 1. 检查网线/交换机/NIC
 2. 保持 v3 配置，不做激进调参
-3. 若反复出现，执行回滚
+3. 若反复出现，按业务文档执行回滚
 
-## 5. 回滚 SOP
+## 4. 业务分流
 
-回滚条件:
-- v3 下出现持续稳定性回归
-- 连续守门测试不通过
+请按当前测试链路进入对应文档:
 
-回滚命令:
-
-```bash
-pkill -f "pylon_ros2_camera_node|pylon_ros2_camera.launch.py" || true
-cd /home/ubuntu/ros2_ws
-source /opt/ros/humble/setup.bash
-source install/setup.bash
-ros2 launch pylon_ros2_camera_wrapper pylon_ros2_camera.launch.py \
-  config_file:=/home/ubuntu/ros2_ws/src/pylon_ros2_camera_wrapper/config/aca2500_106611_18.tuned.yaml
-```
-
-回滚后必须执行:
-- 03 文档中的 A/B/D 三类测试
-
-## 6. 升级调优触发条件
-
-仅在下列情况触发新一轮调优:
-- 关键错误重复出现
-- 相同场景下识别连续性明显下降
-- 启动链路回归为节点不注册或话题不连通
+- 二维码链路: ./04A-二维码故障排查与回滚SOP.md
+- AprilTag 链路: ./04B-AprilTag故障排查与回滚SOP.md

@@ -28,6 +28,7 @@
 
 #include <GenApi/GenApi.h>
 
+#include <cctype>
 #include <rclcpp/logger.hpp>
 #include <signal.h>
 #include <pthread.h>
@@ -44,6 +45,31 @@ namespace pylon_ros2_camera
 namespace
 {
     static const rclcpp::Logger LOGGER = rclcpp::get_logger("basler.pylon.ros2.pylon_ros2_camera_node");
+
+    std::string sanitizeCameraInfoManagerName(const std::string& input)
+    {
+      std::string sanitized;
+      sanitized.reserve(input.size());
+
+      for (const unsigned char character : input)
+      {
+        if (std::isalnum(character) || character == '_')
+        {
+          sanitized.push_back(static_cast<char>(character));
+        }
+        else
+        {
+          sanitized.push_back('_');
+        }
+      }
+
+      if (sanitized.empty())
+      {
+        sanitized = "camera";
+      }
+
+      return sanitized;
+    }
 }
 
 PylonROS2CameraNode::PylonROS2CameraNode(const rclcpp::NodeOptions& options)
@@ -764,10 +790,11 @@ bool PylonROS2CameraNode::startGrabbing()
   // already contains the number of channels
   this->img_raw_msg_.step = this->img_raw_msg_.width * this->pylon_camera_->imagePixelDepth();
 
-  if (!this->camera_info_manager_->setCameraName(this->pylon_camera_->deviceUserID()))
+  const std::string camera_info_manager_name = sanitizeCameraInfoManagerName(this->pylon_camera_->deviceUserID());
+  if (!this->camera_info_manager_->setCameraName(camera_info_manager_name))
   { 
     // valid name contains only alphanumeric signs and '_'
-    RCLCPP_WARN_STREAM(LOGGER, "[" << this->pylon_camera_->deviceUserID() << "] name not valid for camera_info_manager");
+    RCLCPP_WARN_STREAM(LOGGER, "[" << camera_info_manager_name << "] name not valid for camera_info_manager");
   }
 
   this->setupSamplingIndices(this->sampling_indices_,
