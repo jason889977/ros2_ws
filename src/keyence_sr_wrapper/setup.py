@@ -1,0 +1,31 @@
+from glob import glob
+import os
+
+from setuptools import find_packages, setup
+
+package_name = 'keyence_sr_wrapper'
+
+setup(
+    name=package_name,
+    version='0.1.0',
+    packages=find_packages(exclude=['test']),
+    data_files=[
+        ('share/ament_index/resource_index/packages', ['resource/' + package_name]),
+        ('share/' + package_name, ['package.xml']),
+        (os.path.join('share', package_name, 'launch'), glob(os.path.join('launch', '*.launch.py'))),
+    ],
+    install_requires=['setuptools'],
+    zip_safe=True,
+    maintainer='ubuntu',
+    maintainer_email='ubuntu@todo.todo',
+    description='ROS 2 Keyence SR wrapper node with TCP communication and reconnection.',
+    license='BSD-3-Clause',
+    extras_require={
+        'test': ['pytest'],
+    },
+    entry_points={
+        'console_scripts': [
+            'keyence_sr_node = keyence_sr_wrapper.keyence_sr_node:main',
+        ],
+    },
+)

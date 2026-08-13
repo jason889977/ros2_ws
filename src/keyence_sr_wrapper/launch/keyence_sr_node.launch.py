@@ -1,0 +1,36 @@
+from launch import LaunchDescription
+from launch.actions import DeclareLaunchArgument
+from launch.substitutions import LaunchConfiguration
+from launch_ros.actions import Node
+
+
+def generate_launch_description():
+    scanner_ip_arg = DeclareLaunchArgument(
+        'scanner_ip',
+        default_value='172.31.0.91',
+        description='IP address of Keyence SR scanner',
+    )
+    scanner_port_arg = DeclareLaunchArgument(
+        'scanner_port',
+        default_value='9004',
+        description='TCP port of Keyence SR scanner',
+    )
+
+    scanner_node = Node(
+        package='keyence_sr_wrapper',
+        executable='keyence_sr_node',
+        name='keyence_sr_node',
+        output='screen',
+        parameters=[
+            {
+                'scanner_ip': LaunchConfiguration('scanner_ip'),
+                'scanner_port': LaunchConfiguration('scanner_port'),
+            }
+        ],
+    )
+
+    return LaunchDescription([
+        scanner_ip_arg,
+        scanner_port_arg,
+        scanner_node,
+    ])
