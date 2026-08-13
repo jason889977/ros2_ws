@@ -22,11 +22,14 @@ class KeyenceSRNode(Node):
         # 声明一个名为 'scanner_ip' 的 ROS 参数，类型为字符串，默认值为 '172.31.0.91'
         # 用户可在 launch 文件或命令行中覆盖此参数以指向不同扫码器 IP
         self.declare_parameter('scanner_ip', '172.31.0.91')
+
         # 声明一个名为 'scanner_port' 的 ROS 参数，类型为整数，默认值为 9004
         # 9004 是基恩士 SR 系列扫码器默认的 TCP 通信端口
         self.declare_parameter('scanner_port', 9004)
+
         # 从参数服务器中获取 'scanner_ip' 参数的实际值（可能是默认值，也可能是用户覆盖后的值），赋给实例变量
         self.scanner_ip = self.get_parameter('scanner_ip').value
+        
         # 从参数服务器中获取 'scanner_port' 参数的实际值，赋给实例变量
         self.scanner_port = self.get_parameter('scanner_port').value
 
