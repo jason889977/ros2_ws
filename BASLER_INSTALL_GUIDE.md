@@ -4,7 +4,7 @@
 
 ```bash
 cd ~/ros2_ws
-./install_basler_driver.sh
+bash install_basler_driver.sh
 ```
 
 脚本会自动完成所有安装步骤。如果自动下载失败，请按以下手动步骤操作。
@@ -19,7 +19,7 @@ cd ~/ros2_ws
 - **网址**: https://www.baslerweb.com/en/downloads/software-downloads/
 - **选择**: 
   - OS: Linux x86 (64位)
-  - 版本: pylon 8.0.0 或更高
+  - 版本: pylon 8.0.0
   - 格式: Debian 安装包 (`.tar.gz`)
 
 或直接下载链接（可能变化）：
@@ -30,16 +30,18 @@ wget https://www.baslerweb.com/fp-1950067054/software/pylon-8.0.0-linux-x86_64_d
 ### 2. 安装 pylon SDK
 
 ```bash
-# 解压
-tar -xzf pylon-8.0.0-linux-x86_64_debs.tar.gz
-cd pylon-8.0.0-linux-x86_64_debs
+# 解压到独立目录，并定位实际 Debian 包目录
+mkdir -p pylon-8.0.0-extracted
+tar -xzf pylon-8.0.0-linux-x86_64_debs.tar.gz -C pylon-8.0.0-extracted
+cd "$(dirname "$(find pylon-8.0.0-extracted -type f -name 'pylon_*.deb' -print -quit)")"
 
-# 安装
-sudo dpkg -i pylon_*.deb
+# 安装同目录内的全部 Basler Debian 包
+sudo dpkg -i ./*.deb
 sudo apt-get install -f -y  # 修复依赖
 
 # 验证安装目录
 test -d /opt/pylon
+dpkg-query -W pylon codemeter
 ```
 
 ### 3. 配置 USB 权限（USB3 相机必需）
@@ -73,6 +75,7 @@ colcon build --symlink-install --cmake-args -DCMAKE_BUILD_TYPE=Release
 
 ```bash
 # 加载环境
+source /opt/ros/humble/setup.bash
 source ~/ros2_ws/install/setup.bash
 
 # 启动相机节点
@@ -82,7 +85,7 @@ ros2 launch pylon_ros2_camera_wrapper pylon_ros2_camera.launch.py
 ros2 topic list | grep camera
 
 # 查看图像
-ros2 topic echo /camera/image_raw --once
+ros2 topic echo /my_camera/pylon_ros2_camera_node/image_raw --once
 ```
 
 ---
@@ -123,7 +126,7 @@ ros2 topic echo /wechat_qr_node/decoded_info
 ros2 topic list
 
 # 检查话题发布频率
-ros2 topic hz /camera/image_raw
+ros2 topic hz /my_camera/pylon_ros2_camera_node/image_raw
 ```
 
 ### Q2.1: 出现错误 3774873620（buffer incompletely grabbed）
@@ -136,17 +139,17 @@ ros2 topic hz /camera/image_raw
 3. 下调 `frame_rate`（如 14 -> 12 -> 10）。
 4. 检查网卡/交换机/网线质量。
 
-可直接参考并执行：
-- [docs/10-Network-Tuning-Playbook.md](docs/10-Network-Tuning-Playbook.md)
+更多处理步骤见 `handover_ros2_integration_2026-08-07/04-故障排查与回滚SOP.md`。
 
 ### Q3: pylon-ROS-camera 编译失败
-确保已安装 pylon SDK 并正确配置环境变量：
+确保已安装冻结版本的 pylon SDK。项目 launch 会为节点设置 `PYLON_ROOT=/opt/pylon`，不需要在父终端执行 pylon 环境脚本：
 ```bash
-echo $PYLON_ROOT  # 应该显示 /opt/pylon
+test -f /opt/pylon/bin/pylon-setup-env.sh
+dpkg-query -W pylon
 ```
 
 ### Q4: 二维码识别节点无法启动
-检查模型文件是否存在：
+默认 `prefer_wechat_qr=false`，不依赖 WeChatQR 模型。若显式启用 WeChatQR，再检查模型文件：
 ```bash
 ls ~/ros2_ws/install/qrcode_detector/share/qrcode_detector/models/
 # 应该包含 4 个文件：detect.prototxt, detect.caffemodel, sr.prototxt, sr.caffemodel
@@ -154,14 +157,14 @@ ls ~/ros2_ws/install/qrcode_detector/share/qrcode_detector/models/
 
 ---
 
-## 相机参数配置
+## 相机启动参数
 
-编辑 launch 文件自定义相机参数：
+launch 支持 `camera_id`、`config_file`、`mtu_size`、`startup_user_set` 等参数；曝光、帧率等相机参数应写入 YAML：
 ```bash
 ros2 launch pylon_ros2_camera_wrapper pylon_ros2_camera.launch.py \
-    image_topic:=/my_camera/image_raw \
-    frame_rate:=30.0 \
-    exposure:=5000
+  camera_id:=my_camera \
+  config_file:=/home/ubuntu/ros2_ws/src/pylon_ros2_camera_wrapper/config/aca2500_106611_18.tuned_v3.yaml \
+  mtu_size:=1500
 ```
 
 ---
@@ -171,10 +174,3 @@ ros2 launch pylon_ros2_camera_wrapper pylon_ros2_camera.launch.py \
 - **Basler 官方文档**: https://docs.baslerweb.com/
 - **pylon-ROS-camera GitHub**: https://github.com/basler/pylon-ros-camera
 - **ROS 2 文档**: https://docs.ros.org/en/humble/
-
----
-
-## 附：本仓库调优文档入口
-
-- 网络稳定性与 3774873620 专项调优：
-  [docs/10-Network-Tuning-Playbook.md](docs/10-Network-Tuning-Playbook.md)

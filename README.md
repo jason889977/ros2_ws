@@ -13,9 +13,24 @@
 
 ## 环境要求
 
-- Ubuntu 22.04
+- Ubuntu 22.04 LTS (x86_64)
 - ROS 2 Humble
-- Basler pylon SDK
+- Basler pylon SDK 8.0.0
+- Python 3.10
+- NumPy 1.26.4
+- opencv-contrib-python-headless 4.8.1.78
+
+新 PC 首次部署请执行：
+
+先按 ROS 官方文档配置 Humble apt 软件源，然后运行：
+
+```bash
+cd /home/ubuntu/ros2_ws
+bash install_dependencies.sh
+```
+
+完整软件表、手工安装步骤和验收标准见
+`handover_ros2_integration_2026-08-07/06-组件与依赖安装详单.md`。
 
 ## 快速启动
 
@@ -97,6 +112,7 @@ ros2 topic echo /apriltag/pose --once
 ## 文档入口
 
 - 中文启动 SOP：`handover_ros2_integration_2026-08-07/02-启动与运行SOP.md`
+- 新 PC 依赖安装：`handover_ros2_integration_2026-08-07/06-组件与依赖安装详单.md`
 - Basler 安装说明：`BASLER_INSTALL_GUIDE.md`
 
 ## GitHub 仓库

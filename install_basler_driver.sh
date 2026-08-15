@@ -4,8 +4,8 @@
 # 适用于: Ubuntu 22.04 (Jammy) + ROS 2 Humble
 # 
 # 使用方法:
-#   chmod +x install_basler_driver.sh
-#   ./install_basler_driver.sh
+#   bash install_basler_driver.sh
+#   bash install_basler_driver.sh --install-only
 # ============================================================================
 
 set -euo pipefail
@@ -19,6 +19,14 @@ NC='\033[0m'
 
 REQUIRED_OS_VERSION="22.04"
 REQUIRED_ROS_DISTRO="humble"
+INSTALL_ONLY=false
+
+if [ "${1:-}" = "--install-only" ]; then
+    INSTALL_ONLY=true
+elif [ "$#" -gt 0 ]; then
+    echo "用法: $0 [--install-only]"
+    exit 2
+fi
 
 echo -e "${BLUE}=========================================="
 echo " Basler 相机驱动安装脚本"
@@ -47,18 +55,20 @@ if [ "$ID" != "ubuntu" ] || [ "$VERSION_ID" != "$REQUIRED_OS_VERSION" ]; then
     exit 1
 fi
 
-if [ -z "${ROS_DISTRO:-}" ] && [ -f "/opt/ros/$REQUIRED_ROS_DISTRO/setup.bash" ]; then
-    source "/opt/ros/$REQUIRED_ROS_DISTRO/setup.bash"
-fi
+if [ "$INSTALL_ONLY" = false ]; then
+    if [ -z "${ROS_DISTRO:-}" ] && [ -f "/opt/ros/$REQUIRED_ROS_DISTRO/setup.bash" ]; then
+        source "/opt/ros/$REQUIRED_ROS_DISTRO/setup.bash"
+    fi
 
-if [ -z "${ROS_DISTRO:-}" ]; then
-    echo -e "${RED}错误: ROS 2 环境未加载，请先执行 source /opt/ros/$REQUIRED_ROS_DISTRO/setup.bash${NC}"
-    exit 1
-fi
+    if [ -z "${ROS_DISTRO:-}" ]; then
+        echo -e "${RED}错误: ROS 2 环境未加载，请先执行 source /opt/ros/$REQUIRED_ROS_DISTRO/setup.bash${NC}"
+        exit 1
+    fi
 
-if [ "$ROS_DISTRO" != "$REQUIRED_ROS_DISTRO" ]; then
-    echo -e "${RED}错误: 当前 ROS_DISTRO=$ROS_DISTRO，要求为 $REQUIRED_ROS_DISTRO${NC}"
-    exit 1
+    if [ "$ROS_DISTRO" != "$REQUIRED_ROS_DISTRO" ]; then
+        echo -e "${RED}错误: 当前 ROS_DISTRO=$ROS_DISTRO，要求为 $REQUIRED_ROS_DISTRO${NC}"
+        exit 1
+    fi
 fi
 
 mkdir -p "$DOWNLOAD_DIR"
@@ -106,24 +116,27 @@ echo -e "${GREEN}✓ pylon SDK 下载完成${NC}"
 echo -e "\n${GREEN}[2/5] 安装 pylon SDK...${NC}"
 
 echo "解压安装包..."
-PYLON_TOP_DIR="$(tar -tzf "$PYLON_FILE" | head -1 | cut -d'/' -f1)"
-if [ -z "$PYLON_TOP_DIR" ]; then
-    echo -e "${RED}错误: 无法识别安装包目录结构${NC}"
-    exit 1
-fi
-tar -xzf "$PYLON_FILE"
+PYLON_EXTRACT_ROOT="$DOWNLOAD_DIR/extracted-$PYLON_VERSION"
+rm -rf "$PYLON_EXTRACT_ROOT"
+mkdir -p "$PYLON_EXTRACT_ROOT"
+tar -xzf "$PYLON_FILE" -C "$PYLON_EXTRACT_ROOT"
 
-# 查找解压后的目录
-PYLON_EXTRACT_DIR="./$PYLON_TOP_DIR"
-if [ ! -d "$PYLON_EXTRACT_DIR" ]; then
-    echo -e "${RED}错误: 解压目录不存在: $PYLON_EXTRACT_DIR${NC}"
+PYLON_DEB="$(find "$PYLON_EXTRACT_ROOT" -type f -name 'pylon_*.deb' -print -quit)"
+if [ -z "$PYLON_DEB" ]; then
+    echo -e "${RED}错误: 安装包中未找到 pylon_*.deb${NC}"
     exit 1
 fi
+PYLON_EXTRACT_DIR="$(dirname "$PYLON_DEB")"
 
 cd "$PYLON_EXTRACT_DIR"
 
 echo "安装 Debian 包..."
-sudo dpkg -i pylon_*.deb || {
+mapfile -t PYLON_DEB_FILES < <(find "$PYLON_EXTRACT_DIR" -maxdepth 1 -type f -name '*.deb' -print | sort)
+if [ "${#PYLON_DEB_FILES[@]}" -eq 0 ]; then
+    echo -e "${RED}错误: 未找到可安装的 Debian 包${NC}"
+    exit 1
+fi
+sudo dpkg -i "${PYLON_DEB_FILES[@]}" || {
     echo -e "${YELLOW}修复依赖...${NC}"
     sudo apt-get install -f -y
 }
@@ -136,6 +149,13 @@ else
     exit 1
 fi
 
+INSTALLED_PYLON_VERSION="$(dpkg-query -W -f='${Version}' pylon 2>/dev/null || true)"
+if [[ "$INSTALLED_PYLON_VERSION" != "$PYLON_VERSION".* ]]; then
+    echo -e "${RED}错误: pylon 版本为 ${INSTALLED_PYLON_VERSION:-未知}，要求 $PYLON_VERSION.x${NC}"
+    exit 1
+fi
+echo "检测到 pylon 包版本: $INSTALLED_PYLON_VERSION"
+
 # ============================================================================
 # 步骤 3: 设置 USB 权限（用于 USB3 相机）
 # ============================================================================
@@ -146,6 +166,11 @@ if [ -f "/opt/pylon/share/pylon/setup-usb.sh" ]; then
     echo -e "${GREEN}✓ USB 权限配置完成${NC}"
 else
     echo -e "${YELLOW}警告: 未找到 USB 配置脚本，跳过${NC}"
+fi
+
+if [ "$INSTALL_ONLY" = true ]; then
+    echo -e "${GREEN}✓ pylon SDK 安装与权限配置完成${NC}"
+    exit 0
 fi
 
 # ============================================================================
