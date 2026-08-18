@@ -1,0 +1,23 @@
+services:
+  basler_camera:
+    image: ${BASLER_IMAGE:-basler_camera_20260818_v1.0}
+    container_name: ${BASLER_CONTAINER_NAME:-basler_camera}
+    network_mode: host
+    restart: unless-stopped
+    environment:
+      ROS_DOMAIN_ID: ${ROS_DOMAIN_ID:-0}
+      RMW_IMPLEMENTATION: ${RMW_IMPLEMENTATION:-rmw_fastrtps_cpp}
+      CAMERA_ID: ${CAMERA_ID:-my_camera}
+      CAMERA_CONFIG_FILE: ${CAMERA_CONFIG_FILE:-/opt/ros2_ws/deploy/basler_camera/config/aca2500_106611_18.yaml}
+      CAMERA_MTU_SIZE: ${CAMERA_MTU_SIZE:-1500}
+      CAMERA_STARTUP_USER_SET: ${CAMERA_STARTUP_USER_SET:-Default}
+      CAMERA_RESPAWN: ${CAMERA_RESPAWN:-true}
+    devices: []
+    volumes:
+      - ./config:/opt/ros2_ws/deploy/basler_camera/config:ro
+    healthcheck:
+      test: ["CMD-SHELL", "/opt/ros2_ws/deploy/basler_camera/healthcheck.sh"]
+      interval: 15s
+      timeout: 10s
+      retries: 5
+      start_period: 30s

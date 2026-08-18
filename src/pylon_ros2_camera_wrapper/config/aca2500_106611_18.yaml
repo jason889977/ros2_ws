@@ -1,9 +1,9 @@
-# High-throughput camera profile for basler acA2500-14GC (S/N: 003053230F51)
+# High-throughput camera profile for basler acA2500-14GC (S/N: 22297681)
 /**:
   ros__parameters:
     camera_frame: basler_aca2500_106611_18
     device_user_id: "106611-18"
-    serial_number: "003053230F51"
+    serial_number: "22297681"
     user_id: "106611-18"
     mac: ""
     ip: "172.31.0.88"
