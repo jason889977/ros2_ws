@@ -76,6 +76,10 @@ PylonROS2CameraParameter::PylonROS2CameraParameter() :
     grab_strategy_(0),
     camera_frame_("pylon_camera"),
     device_user_id_(""),
+    serial_number_(""),
+    user_id_(""),
+    camera_ip_(""),
+    camera_model_(""),
     frame_rate_(5.0),
     camera_info_url_(""),
     image_encoding_("")
@@ -112,6 +116,22 @@ void PylonROS2CameraParameter::readFromRosParameterServer(rclcpp::Node& nh)
     }
     
     nh.get_parameter("device_user_id", this->device_user_id_);
+
+    if (!nh.has_parameter("serial_number"))
+        nh.declare_parameter<std::string>("serial_number", "");
+    nh.get_parameter("serial_number", this->serial_number_);
+
+    if (!nh.has_parameter("user_id"))
+        nh.declare_parameter<std::string>("user_id", "");
+    nh.get_parameter("user_id", this->user_id_);
+
+    if (!nh.has_parameter("ip"))
+        nh.declare_parameter<std::string>("ip", "");
+    nh.get_parameter("ip", this->camera_ip_);
+
+    if (!nh.has_parameter("model"))
+        nh.declare_parameter<std::string>("model", "");
+    nh.get_parameter("model", this->camera_model_);
 
     // frame rate
     RCLCPP_DEBUG(LOGGER, "---> frame_rate");
@@ -604,6 +624,26 @@ void PylonROS2CameraParameter::validateParameterSet(rclcpp::Node& nh)
 const std::string& PylonROS2CameraParameter::deviceUserID() const
 {
     return this->device_user_id_;
+}
+
+const std::string& PylonROS2CameraParameter::serialNumber() const
+{
+    return this->serial_number_;
+}
+
+const std::string& PylonROS2CameraParameter::userID() const
+{
+    return this->user_id_;
+}
+
+const std::string& PylonROS2CameraParameter::cameraIP() const
+{
+    return this->camera_ip_;
+}
+
+const std::string& PylonROS2CameraParameter::cameraModel() const
+{
+    return this->camera_model_;
 }
 
 std::string PylonROS2CameraParameter::shutterModeString() const

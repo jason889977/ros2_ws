@@ -45,6 +45,14 @@
 namespace pylon_ros2_camera
 {
 
+struct CameraIdentity
+{
+    std::string serial_number;
+    std::string user_id;
+    std::string ip;
+    std::string model;
+};
+
 // Number of channels for image encoding
 #define CHANNEL_MONO8 1
 #define CHANNEL_RGB8  3
@@ -69,6 +77,8 @@ public:
      * @return new PylonROS2Camera instance or NULL if the camera was not found.
      */
     static std::unique_ptr<PylonROS2Camera> create(const std::string& device_user_id);
+
+    static std::unique_ptr<PylonROS2Camera> create(const CameraIdentity& identity);
 
     /**
      * Configures the camera according to the software trigger mode.

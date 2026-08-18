@@ -1,9 +1,13 @@
-# Throughput/stability tuned v3 profile for basler acA2500-14GC (S/N: 22297681)
+# Throughput/stability tuned v3 profile for basler acA2500-14GC (S/N: 003053230F51)
 # v3 strategy: keep network-safe GigE settings and reduce payload via binning.
 /**:
   ros__parameters:
     camera_frame: basler_aca2500_106611_18
     device_user_id: "106611-18"
+    serial_number: "003053230F51"
+    user_id: "106611-18"
+    ip: "172.31.0.88"
+    model: "acA2500-14gc"
     camera_info_url: "package://pylon_ros2_camera_wrapper/config/aca2500_106611_18.calib.yaml"
     frame_rate: 8.0
     grab_timeout: 1500

@@ -631,11 +631,20 @@ void PylonROS2CameraNode::initDiagnostics()
 
 bool PylonROS2CameraNode::initAndRegister()
 {
-  this->pylon_camera_ = PylonROS2Camera::create(this->pylon_camera_parameter_set_.deviceUserID());
-  if (this->pylon_camera_parameter_set_.deviceUserID() != "")
-    RCLCPP_INFO_STREAM(LOGGER, "Pylon camera instance created with the following user id: " << this->pylon_camera_parameter_set_.deviceUserID());
+  CameraIdentity camera_identity{
+    this->pylon_camera_parameter_set_.serialNumber(),
+    this->pylon_camera_parameter_set_.userID().empty() ? this->pylon_camera_parameter_set_.deviceUserID() : this->pylon_camera_parameter_set_.userID(),
+    this->pylon_camera_parameter_set_.cameraIP(),
+    this->pylon_camera_parameter_set_.cameraModel()};
+  this->pylon_camera_ = PylonROS2Camera::create(camera_identity);
+  if (!camera_identity.serial_number.empty() || !camera_identity.user_id.empty() ||
+      !camera_identity.ip.empty() || !camera_identity.model.empty())
+    RCLCPP_INFO_STREAM(LOGGER, "Pylon camera identity: serial_number=" << camera_identity.serial_number
+                            << ", user_id=" << camera_identity.user_id
+                            << ", ip=" << camera_identity.ip
+                            << ", model=" << camera_identity.model);
   else
-    RCLCPP_INFO(LOGGER, "No user id for the camera has been set");
+    RCLCPP_INFO(LOGGER, "No camera identity has been set");
 
   if (this->pylon_camera_ == nullptr)
   {
@@ -655,7 +664,7 @@ bool PylonROS2CameraNode::initAndRegister()
     rclcpp::Rate r(0.5);
     while (rclcpp::ok() && this->pylon_camera_ == nullptr)
     {
-      this->pylon_camera_ = PylonROS2Camera::create(this->pylon_camera_parameter_set_.deviceUserID());
+      this->pylon_camera_ = PylonROS2Camera::create(camera_identity);
       if (this->pylon_camera_ == nullptr)
       {
         RCLCPP_WARN_STREAM(LOGGER, "Failed to connect camera device with device user id: "<< this->pylon_camera_parameter_set_.deviceUserID() << ". "
