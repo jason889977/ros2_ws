@@ -1,0 +1,24 @@
+services:
+  apriltag_pose_reader:
+    image: ${APRILTAG_IMAGE:-apriltag_pose_reader_20260818_v1.0}
+    container_name: ${APRILTAG_CONTAINER_NAME:-apriltag_pose_reader}
+    network_mode: host
+    restart: unless-stopped
+    environment:
+      ROS_DOMAIN_ID: ${ROS_DOMAIN_ID:-0}
+      RMW_IMPLEMENTATION: ${RMW_IMPLEMENTATION:-rmw_fastrtps_cpp}
+      IMAGE_TOPIC: ${IMAGE_TOPIC:-/my_camera/pylon_ros2_camera_node/image_raw}
+      CAMERA_INFO_TOPIC: ${CAMERA_INFO_TOPIC:-/my_camera/pylon_ros2_camera_node/camera_info}
+      START_DETECTOR: ${START_DETECTOR:-true}
+      TAG_FAMILY: ${TAG_FAMILY:-36h11}
+      TAG_ID: ${TAG_ID:--1}
+      LOOKUP_PARENT_FRAME: ${LOOKUP_PARENT_FRAME:-}
+      LOOKUP_RATE_HZ: ${LOOKUP_RATE_HZ:-0.0}
+    volumes:
+      - ./config:/opt/ros2_ws/deploy/apriltag_pose_reader/config:ro
+    healthcheck:
+      test: ["CMD-SHELL", "/opt/ros2_ws/deploy/apriltag_pose_reader/healthcheck.sh"]
+      interval: 15s
+      timeout: 10s
+      retries: 5
+      start_period: 30s
