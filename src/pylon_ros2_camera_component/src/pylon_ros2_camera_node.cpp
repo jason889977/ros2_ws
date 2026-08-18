@@ -634,13 +634,15 @@ bool PylonROS2CameraNode::initAndRegister()
   CameraIdentity camera_identity{
     this->pylon_camera_parameter_set_.serialNumber(),
     this->pylon_camera_parameter_set_.userID().empty() ? this->pylon_camera_parameter_set_.deviceUserID() : this->pylon_camera_parameter_set_.userID(),
+    this->pylon_camera_parameter_set_.cameraMAC(),
     this->pylon_camera_parameter_set_.cameraIP(),
     this->pylon_camera_parameter_set_.cameraModel()};
   this->pylon_camera_ = PylonROS2Camera::create(camera_identity);
   if (!camera_identity.serial_number.empty() || !camera_identity.user_id.empty() ||
-      !camera_identity.ip.empty() || !camera_identity.model.empty())
+      !camera_identity.mac.empty() || !camera_identity.ip.empty() || !camera_identity.model.empty())
     RCLCPP_INFO_STREAM(LOGGER, "Pylon camera identity: serial_number=" << camera_identity.serial_number
                             << ", user_id=" << camera_identity.user_id
+                            << ", mac=" << camera_identity.mac
                             << ", ip=" << camera_identity.ip
                             << ", model=" << camera_identity.model);
   else

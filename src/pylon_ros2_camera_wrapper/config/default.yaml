@@ -11,6 +11,7 @@
     device_user_id: ""
     serial_number: ""
     user_id: ""
+    mac: ""
     ip: ""
     model: ""
 

@@ -78,6 +78,7 @@ PylonROS2CameraParameter::PylonROS2CameraParameter() :
     device_user_id_(""),
     serial_number_(""),
     user_id_(""),
+    camera_mac_(""),
     camera_ip_(""),
     camera_model_(""),
     frame_rate_(5.0),
@@ -124,6 +125,10 @@ void PylonROS2CameraParameter::readFromRosParameterServer(rclcpp::Node& nh)
     if (!nh.has_parameter("user_id"))
         nh.declare_parameter<std::string>("user_id", "");
     nh.get_parameter("user_id", this->user_id_);
+
+    if (!nh.has_parameter("mac"))
+        nh.declare_parameter<std::string>("mac", "");
+    nh.get_parameter("mac", this->camera_mac_);
 
     if (!nh.has_parameter("ip"))
         nh.declare_parameter<std::string>("ip", "");
@@ -634,6 +639,11 @@ const std::string& PylonROS2CameraParameter::serialNumber() const
 const std::string& PylonROS2CameraParameter::userID() const
 {
     return this->user_id_;
+}
+
+const std::string& PylonROS2CameraParameter::cameraMAC() const
+{
+    return this->camera_mac_;
 }
 
 const std::string& PylonROS2CameraParameter::cameraIP() const

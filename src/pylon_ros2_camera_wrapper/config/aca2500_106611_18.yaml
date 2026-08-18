@@ -5,6 +5,7 @@
     device_user_id: "106611-18"
     serial_number: "003053230F51"
     user_id: "106611-18"
+    mac: ""
     ip: "172.31.0.88"
     model: "acA2500-14gc"
     camera_info_url: "package://pylon_ros2_camera_wrapper/config/aca2500_106611_18.calib.yaml"

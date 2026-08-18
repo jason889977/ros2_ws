@@ -70,6 +70,8 @@ public:
 
     const std::string& userID() const;
 
+    const std::string& cameraMAC() const;
+
     const std::string& cameraIP() const;
 
     const std::string& cameraModel() const;
@@ -365,6 +367,7 @@ protected:
 
     std::string serial_number_;
     std::string user_id_;
+    std::string camera_mac_;
     std::string camera_ip_;
     std::string camera_model_;
 

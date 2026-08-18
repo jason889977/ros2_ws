@@ -209,7 +209,7 @@ std::unique_ptr<PylonROS2Camera> PylonROS2Camera::create(const CameraIdentity& i
         {
             Pylon::DeviceInfoList_t::const_iterator it;
             if (identity.serial_number.empty() && identity.user_id.empty() &&
-                identity.ip.empty() && identity.model.empty())
+                identity.mac.empty() && identity.ip.empty() && identity.model.empty())
             {
                 for (it = device_list.begin(); it != device_list.end(); ++it)
                 {
@@ -239,17 +239,20 @@ std::unique_ptr<PylonROS2Camera> PylonROS2Camera::create(const CameraIdentity& i
             {
                                 const std::string serial_number(it->GetSerialNumber().c_str());
                                 const std::string user_id(it->GetUserDefinedName().c_str());
+                                const std::string mac(it->GetMacAddress().c_str());
                                 const std::string ip(it->GetIpAddress().c_str());
                                 const std::string model(it->GetModelName().c_str());
                                 const bool serial_matches = !identity.serial_number.empty() && serial_number == identity.serial_number;
                                 const bool user_matches = !identity.user_id.empty() && user_id == identity.user_id;
+                                const bool mac_matches = !identity.mac.empty() && mac == identity.mac;
                                 const bool ip_matches = !identity.ip.empty() && ip == identity.ip;
                                 const bool model_matches = !identity.model.empty() && model == identity.model;
 
                                 if ((!identity.serial_number.empty() && serial_matches) ||
                                         (identity.serial_number.empty() && !identity.user_id.empty() && user_matches) ||
-                                        (identity.serial_number.empty() && identity.user_id.empty() && !identity.ip.empty() && ip_matches) ||
-                                        (identity.serial_number.empty() && identity.user_id.empty() && identity.ip.empty() && model_matches))
+                                        (identity.serial_number.empty() && identity.user_id.empty() && !identity.mac.empty() && mac_matches) ||
+                                        (identity.serial_number.empty() && identity.user_id.empty() && identity.mac.empty() && !identity.ip.empty() && ip_matches) ||
+                                        (identity.serial_number.empty() && identity.user_id.empty() && identity.mac.empty() && identity.ip.empty() && model_matches))
                 {
                     found_desired_device = true;
                     break;

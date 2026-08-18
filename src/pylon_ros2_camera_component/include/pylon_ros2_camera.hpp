@@ -49,6 +49,7 @@ struct CameraIdentity
 {
     std::string serial_number;
     std::string user_id;
+    std::string mac;
     std::string ip;
     std::string model;
 };
