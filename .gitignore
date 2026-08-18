@@ -16,3 +16,6 @@ __pycache__/
 
 # VS Code local state
 .vscode/
+
+# Licensed vendor SDKs supplied outside the repository
+deploy/basler_camera/pylon-sdk/

@@ -16,11 +16,19 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 
 # Place the licensed Basler pylon runtime/SDK under deploy/basler_camera/pylon-sdk.
 # The SDK is intentionally not committed to this repository.
-COPY pylon-sdk/ /opt/pylon/
+# Place the licensed Basler pylon setup archive under deploy/basler_camera/pylon-sdk.
+# The archive contains a second SDK tarball, so both layers must be extracted.
+COPY deploy/basler_camera/pylon-sdk/pylon-8.0.0-linux-x86_64_setup.tar.gz /tmp/pylon-setup.tar.gz
+RUN mkdir -p /tmp/pylon-inner /opt/pylon && \
+    tar -xzf /tmp/pylon-setup.tar.gz -C /tmp/pylon-inner && \
+    tar -xzf /tmp/pylon-inner/pylon-*.tar.gz -C /opt/pylon && \
+    rm -rf /tmp/pylon-setup.tar.gz /tmp/pylon-inner
 
 WORKDIR /opt/ros2_ws
 COPY src/ src/
-COPY deploy/basler_camera/ deploy/basler_camera/
+COPY deploy/basler_camera/config/ deploy/basler_camera/config/
+COPY deploy/basler_camera/*.sh deploy/basler_camera/
+COPY deploy/basler_camera/README.md deploy/basler_camera/ROS2-INTERFACE.md deploy/basler_camera/CHANGELOG.md deploy/basler_camera/
 
 RUN . /opt/ros/humble/setup.sh && \
     rosdep update --rosdistro humble && \
