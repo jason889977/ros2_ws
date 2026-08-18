@@ -31,8 +31,6 @@ COPY deploy/basler_camera/*.sh deploy/basler_camera/
 COPY deploy/basler_camera/README.md deploy/basler_camera/ROS2-INTERFACE.md deploy/basler_camera/CHANGELOG.md deploy/basler_camera/
 
 RUN . /opt/ros/humble/setup.sh && \
-    rosdep update --rosdistro humble && \
-    rosdep install --from-paths src --ignore-src --rosdistro humble -r -y && \
     colcon build --symlink-install --packages-up-to pylon_ros2_camera_wrapper
 
 COPY deploy/basler_camera/entrypoint.sh /entrypoint.sh
