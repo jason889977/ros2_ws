@@ -35,13 +35,16 @@
 - [ ] 已完成图谱连通测试
 - [ ] 二维码链路: 已按 03A 完成验收
 - [ ] AprilTag 链路: 已按 03B 完成验收
+- [ ] 已确认图像规格为 Mono8、2590x1942
+- [ ] 已记录驱动 `Image publish FPS` 或 `/diagnostics` 发布计数约为 14-15 FPS
+- [ ] 已知 `ros2 topic hz` 是订阅端到达率，不要求等于驱动发布计数
 - [ ] 已完成关键错误码守门检查
 - [ ] 已形成测试结论与记录
 
 ## 5. 风险与回滚认知签收
 
-- [ ] 已知默认基线为 tuned_v3
-- [ ] 已知回滚目标为 tuned.yaml
+- [ ] 已知默认基线为 aca2500_106611_18.yaml
+- [ ] 已知 tuned_v3 仅为 8 FPS、2x2 binning 的降载回退配置
 - [ ] 已知 3774873620 为阻断级风险
 - [ ] 已知回滚后必须重做关键测试
 - [ ] 二维码链路: 已阅读 04A 并理解回滚流程
@@ -54,6 +57,8 @@
 - ros2 topic info -v image_raw 输出
 - 二维码: ros2 topic echo /wechat_qr_node/decoded_info 输出
 - AprilTag: /detections、/apriltag/pose、/apriltag/transform 输出
+- 驱动 `Image publish FPS` 日志或 `/diagnostics` 输出
+- ros2 topic hz 订阅端到达率输出
 - 错误码扫描输出
 
 ## 7. 最终结论

@@ -25,8 +25,11 @@ cd /home/ubuntu/ros2_ws
 source /opt/ros/humble/setup.bash
 source install/setup.bash
 ros2 launch pylon_ros2_camera_wrapper pylon_ros2_camera.launch.py \
-  config_file:=/home/ubuntu/ros2_ws/src/pylon_ros2_camera_wrapper/config/aca2500_106611_18.tuned_v3.yaml
+  config_file:=/home/ubuntu/ros2_ws/src/pylon_ros2_camera_wrapper/config/aca2500_106611_18.yaml \
+  startup_user_set:=Default
 ```
+
+默认配置使用 Mono8、10000 us 曝光和全分辨率 2590x1942；驱动会自动采用当前条件下的最大帧率。
 
 ## 4. 公共可视化入口
 
@@ -81,7 +84,7 @@ ping -c 5 <相机IP>
 参考位置：
 
 - [pylon_ros2_camera.launch.py](../src/pylon_ros2_camera_wrapper/launch/pylon_ros2_camera.launch.py)
-- [device_user_id 配置示例](../src/pylon_ros2_camera_wrapper/config/aca2500_106611_18.tuned_v3.yaml)
+- [device_user_id 配置示例](../src/pylon_ros2_camera_wrapper/config/aca2500_106611_18.yaml)
 
 ## 6. 公共快速判定规则
 
@@ -100,6 +103,8 @@ ros2 node list
 ros2 topic info -v /my_camera/pylon_ros2_camera_node/image_raw
 ros2 topic hz /my_camera/pylon_ros2_camera_node/image_raw
 ```
+
+`ros2 topic hz` 显示该订阅进程收到图像的速率，不等同于驱动发布计数。全分辨率图像较大，订阅端可能受 DDS、反序列化和主机调度影响。相机发布 FPS 以驱动日志中的 `Image publish FPS` 或 `/diagnostics` 的 `image_publish_rate` 为准；当前硬件实测约 14-15 FPS。
 
 ## 8. 公共停止流程
 

@@ -54,7 +54,8 @@ cd /home/ubuntu/ros2_ws
 source /opt/ros/humble/setup.bash
 source install/setup.bash
 ros2 launch pylon_ros2_camera_wrapper pylon_ros2_camera.launch.py \
-  config_file:=/home/ubuntu/ros2_ws/src/pylon_ros2_camera_wrapper/config/aca2500_106611_18.tuned_v3.yaml
+  config_file:=/home/ubuntu/ros2_ws/src/pylon_ros2_camera_wrapper/config/aca2500_106611_18.yaml \
+  startup_user_set:=Default
 ```
 
 ## 5. 场景C: 出现 3774873620 或抓取不完整错误
@@ -68,16 +69,18 @@ grep -E "3774873620|incompletely grabbed|Grab was not successful" -i "$latest" |
 
 处理顺序:
 1. 检查网线/交换机/NIC
-2. 保持 v3 配置，不做激进调参
-3. 若反复出现，执行回滚
+2. 先保持默认全分辨率配置，确认错误是否持续出现
+3. 若反复出现，执行降载回退
 
-## 6. 回滚 SOP
+## 6. 降载/故障回退 SOP
 
-回滚条件:
-- v3 下出现持续稳定性回归
+回退条件:
+- 默认全分辨率配置下出现持续抓取或链路稳定性问题
 - 连续守门测试不通过
 
-回滚命令:
+`tuned_v3` 使用 8 FPS、2x2 binning 和更大的包间隔，仅作为带宽降载配置。
+
+回退命令:
 
 ```bash
 pkill -f "qrcode_node|qrcode_detector.launch.py" || true
@@ -86,10 +89,11 @@ cd /home/ubuntu/ros2_ws
 source /opt/ros/humble/setup.bash
 source install/setup.bash
 ros2 launch pylon_ros2_camera_wrapper pylon_ros2_camera.launch.py \
-  config_file:=/home/ubuntu/ros2_ws/src/pylon_ros2_camera_wrapper/config/aca2500_106611_18.tuned_v3.yaml
+  config_file:=/home/ubuntu/ros2_ws/src/pylon_ros2_camera_wrapper/config/aca2500_106611_18.tuned_v3.yaml \
+  startup_user_set:=Default
 ```
 
-回滚后必须执行:
+回退后必须执行:
 - ./03A-二维码测试方法与验收标准.md 中的关键测试项
 
 ## 7. 升级调优触发条件

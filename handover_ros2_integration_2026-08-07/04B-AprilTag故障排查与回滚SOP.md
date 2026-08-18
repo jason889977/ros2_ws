@@ -94,16 +94,18 @@ grep -E "3774873620|incompletely grabbed|Grab was not successful" -i "$latest" |
 
 处理顺序:
 1. 检查网线/交换机/NIC
-2. 保持 v3 配置，不做激进调参
-3. 若反复出现，执行回滚
+2. 先保持默认全分辨率配置，确认错误是否持续出现
+3. 若反复出现，执行降载回退
 
-## 7. 回滚 SOP
+## 7. 降载/故障回退 SOP
 
-回滚条件:
-- v3 下出现持续稳定性回归
+回退条件:
+- 默认全分辨率配置下出现持续抓取或链路稳定性问题
 - 连续守门测试不通过
 
-回滚命令:
+`tuned_v3` 使用 8 FPS、2x2 binning 和更大的包间隔，仅作为带宽降载配置。
+
+回退命令:
 
 ```bash
 pkill -f "apriltag_pose_reader|apriltag_node|apriltag_pose_reader.launch.py" || true
@@ -112,13 +114,36 @@ cd /home/ubuntu/ros2_ws
 source /opt/ros/humble/setup.bash
 source install/setup.bash
 ros2 launch pylon_ros2_camera_wrapper pylon_ros2_camera.launch.py \
-  config_file:=/home/ubuntu/ros2_ws/src/pylon_ros2_camera_wrapper/config/aca2500_106611_18.tuned_v3.yaml
+  config_file:=/home/ubuntu/ros2_ws/src/pylon_ros2_camera_wrapper/config/aca2500_106611_18.tuned_v3.yaml \
+  startup_user_set:=Default
 ```
 
-回滚后必须执行:
+回退后必须执行:
 - ./03B-AprilTag测试方法与验收标准.md 中的关键测试项
 
-## 8. 升级调优触发条件
+## 8. 场景E: 相机报 0xE1018006 被其他应用控制
+
+先检查当前主机是否仍有占用进程或 GigE Vision 控制连接:
+
+```bash
+ps -eo user,pid,ppid,stat,cmd | grep -Ei 'pylon|basler|camera' | grep -v grep
+ss -uanp | grep -E '(:3956|172\.31\.0\.88)' || true
+```
+
+优先使用一键脚本的 `restart` 模式。脚本会分阶段停止本机相机进程、确认无残留，
+并等待 GigE 控制锁释放:
+
+```bash
+CAMERA_MODE=restart /home/ubuntu/ros2_ws/scripts/deploy_and_run_camera_apriltag.sh
+```
+
+判定:
+- 若仍能看到本机相机进程，先查明其所属用户或服务，不要并行启动第二个相机节点
+- 若本机无相机进程、无 UDP 3956 连接，等待 10 秒后仍报 `0xE1018006`，控制权来自其他主机或 Pylon Viewer
+- 此时应关闭同一相机网段其他主机上的 Pylon Viewer/采集程序；不要反复启动 ROS 节点
+- 确认不存在合法控制端后，最后手段是给相机断电重启；该操作会中断所有相机连接
+
+## 9. 升级调优触发条件
 
 仅在下列情况触发新一轮调优:
 - 检测结果持续丢失

@@ -93,8 +93,10 @@
 #include <diagnostic_updater/diagnostic_updater.hpp>
 
 #include <array>
+#include <atomic>
 #include <chrono>
 #include <cstddef>
+#include <cstdint>
 #include <memory>
 #include <mutex>
 #include <string>
@@ -1551,6 +1553,12 @@ protected:
   void createDiagnostics(diagnostic_updater::DiagnosticStatusWrapper &stat);
 
   /**
+   * @brief Create image publisher rate diagnostics
+   * @param stat Diagnostic status wrapper
+   */
+  void createImagePublishDiagnostics(diagnostic_updater::DiagnosticStatusWrapper &stat);
+
+  /**
    * @brief Create camera info diagnostics
    * @param stat Diagnostic status wrapper
    */
@@ -1835,6 +1843,9 @@ protected:
 
   // diagnostics
   diagnostic_updater::Updater diagnostics_updater_;
+  std::atomic<std::uint64_t> image_publish_count_{0};
+  std::uint64_t image_publish_count_at_last_diagnostic_{0};
+  std::chrono::steady_clock::time_point image_fps_window_start_{std::chrono::steady_clock::now()};
 };
 
 } // namespace pylon_camera

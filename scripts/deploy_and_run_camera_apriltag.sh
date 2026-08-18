@@ -12,6 +12,8 @@ WS_SETUP="$WORKSPACE_DIR/install/setup.bash"
 CAMERA_MODE="${CAMERA_MODE:-reuse}"
 CAMERA_ID="${CAMERA_ID:-basler_106611_18}"
 CAMERA_CONFIG="$WORKSPACE_DIR/install/pylon_ros2_camera_wrapper/share/pylon_ros2_camera_wrapper/config/aca2500_106611_18.yaml"
+CAMERA_STOP_TIMEOUT_S="${CAMERA_STOP_TIMEOUT_S:-10}"
+CAMERA_LOCK_RELEASE_WAIT_S="${CAMERA_LOCK_RELEASE_WAIT_S:-10}"
 IMAGE_TOPIC=""
 CAM_INFO_TOPIC=""
 START_CAMERA=true
@@ -71,8 +73,37 @@ detect_running_camera_id() {
 
 stop_existing_camera() {
   echo "[INFO] Stopping existing camera processes before restart..."
-  pkill -f "pylon_ros2_camera_node|pylon_ros2_camera.launch.py|pylon_ros2_camera_wrapper" || true
-  sleep 2
+  local pattern="pylon_ros2_camera_node|pylon_ros2_camera.launch.py|pylon_ros2_camera_wrapper"
+  local deadline=$((SECONDS + CAMERA_STOP_TIMEOUT_S))
+  local pids=()
+
+  mapfile -t pids < <(pgrep -f "$pattern" || true)
+  if [[ ${#pids[@]} -gt 0 ]]; then
+    echo "[INFO] Sending SIGTERM to camera process(es): ${pids[*]}"
+    kill "${pids[@]}" 2>/dev/null || true
+  fi
+
+  while mapfile -t pids < <(pgrep -f "$pattern" || true) &&
+        [[ ${#pids[@]} -gt 0 && $SECONDS -lt $deadline ]]; do
+    sleep 1
+  done
+
+  mapfile -t pids < <(pgrep -f "$pattern" || true)
+  if [[ ${#pids[@]} -gt 0 ]]; then
+    echo "[WARN] Camera process(es) did not stop in ${CAMERA_STOP_TIMEOUT_S}s; sending SIGKILL: ${pids[*]}"
+    kill -KILL "${pids[@]}" 2>/dev/null || true
+    sleep 1
+  fi
+
+  mapfile -t pids < <(pgrep -f "$pattern" || true)
+  if [[ ${#pids[@]} -gt 0 ]]; then
+    echo "[ERROR] Camera process(es) are still running, possibly under another user: ${pids[*]}"
+    ps -o user=,pid=,ppid=,stat=,cmd= -p "$(IFS=,; echo "${pids[*]}")" || true
+    return 1
+  fi
+
+  echo "[INFO] Local camera processes stopped; waiting ${CAMERA_LOCK_RELEASE_WAIT_S}s for the GigE control lock..."
+  sleep "$CAMERA_LOCK_RELEASE_WAIT_S"
 }
 
 cleanup() {
@@ -133,9 +164,17 @@ if [[ "$START_CAMERA" == true ]]; then
   echo "[INFO] Starting camera node in namespace: /$CAMERA_ID"
   ros2 launch pylon_ros2_camera_wrapper pylon_ros2_camera.launch.py \
     camera_id:="$CAMERA_ID" \
-    config_file:="$CAMERA_CONFIG" &
+    config_file:="$CAMERA_CONFIG" \
+    startup_user_set:=Default &
   CAM_LAUNCH_PID=$!
   sleep 4
+  if ! kill -0 "$CAM_LAUNCH_PID" 2>/dev/null; then
+    wait "$CAM_LAUNCH_PID" || true
+    echo "[ERROR] Camera launch exited before initialization completed."
+    echo "[ERROR] If the log contains 0xE1018006 and no local camera process is listed,"
+    echo "[ERROR] close pylonviewer on every host connected to 172.31.0.88, then retry."
+    exit 1
+  fi
 fi
 
 IMAGE_TOPIC="/$CAMERA_ID/pylon_ros2_camera_node/image_raw"
@@ -165,3 +204,5 @@ Validation commands:
 To stop:
   kill $CAM_LAUNCH_PID $APRILTAG_LAUNCH_PID
 EOF
+
+wait "$APRILTAG_LAUNCH_PID"

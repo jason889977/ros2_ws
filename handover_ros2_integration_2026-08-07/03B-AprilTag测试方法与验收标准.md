@@ -14,7 +14,9 @@
 - 执行人:
 - 主机:
 - 相机型号与 DeviceUserID:
-- 配置文件:
+- 配置文件: aca2500_106611_18.yaml
+- startup_user_set: Default
+- 图像规格: Mono8, 2590x1942
 - 标签信息（family/id）:
 - 场景说明:
 
@@ -22,7 +24,8 @@
 
 1. 先按本文件测试项 A-D 逐项执行并记录结果。
 2. 执行测试项 E（RViz2 可视化）确认位姿显示正常。
-3. 追加关键错误守门检查:
+3. 执行测试项 F，分别记录驱动发布计数与订阅端到达率。
+4. 执行测试项 G，完成关键错误守门检查:
 
 ```bash
 latest=$(ls -1t /home/ubuntu/.ros/log/pylon_ros2_camera_wrapper_*.log | head -n 1)
@@ -126,7 +129,25 @@ rviz2
 不通过判据:
 - 仅有图像无位姿，或 TF 不更新
 
-## 8. 测试项 F: 关键错误码守门
+## 8. 测试项 F: 相机发布计数与订阅到达率
+
+命令:
+
+```bash
+ros2 topic hz /my_camera/pylon_ros2_camera_node/image_raw
+ros2 topic echo /diagnostics
+```
+
+通过判据:
+- 驱动 `Image publish FPS` 日志或 `/diagnostics` 发布计数约为 14-15 FPS
+- 图像流持续，无明显中断
+- `ros2 topic hz` 单独记录为订阅端到达率，不要求等于驱动发布计数
+
+说明:
+- 全分辨率 Mono8 单帧约 5 MB，当前 `ros2 topic hz` 测试约为 6.65 Hz
+- 驱动发布计数正常而订阅端到达率较低时，优先检查 DDS、主机负载和订阅端处理
+
+## 9. 测试项 G: 关键错误码守门
 
 命令:
 
@@ -141,13 +162,15 @@ grep -E "3774873620|incompletely grabbed|Grab was not successful" -i "$latest" |
 不通过判据:
 - 出现持续或重复关键错误，需触发回滚或网络排障
 
-## 9. 最小验收结论模板
+## 10. 最小验收结论模板
 
 - 图谱连通: 通过/不通过
 - 检测可达: 通过/不通过
 - 6D 位姿可达: 通过/不通过
 - TF2 连通: 通过/不通过
 - RViz2 可视化: 通过/不通过
+- 驱动发布计数: FPS
+- 订阅端到达率: Hz
 - 错误码守门: 通过/不通过
 - 综合结论: 可交付/需整改
 - 备注:

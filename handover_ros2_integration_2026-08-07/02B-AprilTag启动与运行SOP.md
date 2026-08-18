@@ -24,7 +24,8 @@ cd /home/ubuntu/ros2_ws
 source /opt/ros/humble/setup.bash
 source install/setup.bash
 ros2 launch pylon_ros2_camera_wrapper pylon_ros2_camera.launch.py \
-  config_file:=/home/ubuntu/ros2_ws/src/pylon_ros2_camera_wrapper/config/aca2500_106611_18.tuned_v3.yaml
+  config_file:=/home/ubuntu/ros2_ws/src/pylon_ros2_camera_wrapper/config/aca2500_106611_18.yaml \
+  startup_user_set:=Default
 ```
 
 ### 终端2: 启动 AprilTag 检测与位姿读取
@@ -63,6 +64,21 @@ ros2 topic echo /apriltag/pose --once
 ros2 topic echo /apriltag/transform --once
 ```
 
+相机图像 FPS 查询：
+
+```bash
+ros2 topic hz /my_camera/pylon_ros2_camera_node/image_raw
+ros2 topic echo /diagnostics
+```
+
+相机节点定期在日志中输出 `Image publish FPS`，并在 `/diagnostics` 的
+`image_publish_rate` 项中提供 `fps`、窗口帧数和累计帧数。这是驱动发布计数，
+当前全分辨率硬件实测约 14-15 FPS，不是配置参数 `frame_rate` 的目标值。
+
+`ros2 topic hz` 会建立订阅者，显示该订阅进程收到消息的速率。全分辨率 Mono8
+单帧约 5 MB，DDS、反序列化和订阅进程调度可能使该值低于驱动发布计数；当前测试
+约为 6.65 Hz。判断相机发布 FPS 时，以 `Image publish FPS` 或 `/diagnostics` 为准。
+
 ## 4. 6D 位姿与 TF2 变换验证
 
 AprilTag 检测到的 6D 位姿会同时出现在两个话题:
@@ -97,13 +113,19 @@ ros2 run tf2_ros tf2_echo <header.frame_id> <child_frame_id>
 CAMERA_MODE=restart /home/ubuntu/ros2_ws/scripts/deploy_and_run_camera_apriltag.sh
 ```
 
+`restart` 会先发送 `SIGTERM`，等待本机相机进程退出，必要时发送 `SIGKILL`，
+然后等待 10 秒让 GigE 控制锁释放。若此后仍报 `0xE1018006`，说明控制端不在
+当前本机进程中；请关闭连接到 `172.31.0.88` 的其他主机上的 Pylon Viewer 或
+相机程序，再重试。可用 `CAMERA_LOCK_RELEASE_WAIT_S=<秒>` 调整等待时间。
+
 ## 6. 手动验收（推荐）
 
-当需要在真实相机上做一次性完整验收（A-F）时，请按以下顺序执行:
+当需要在真实相机上做一次性完整验收（A-G）时，请按以下顺序执行:
 
 1. 执行 [03B-AprilTag测试方法与验收标准.md](03B-AprilTag测试方法与验收标准.md) 的测试项 A-D。
-2. 启动 RViz2，确认标签姿态与 TF2 连通。
-3. 检查最新相机日志中是否出现关键错误码（3774873620 / incompletely grabbed / Grab was not successful）。
+2. 执行测试项 E，确认 RViz2 标签姿态与 TF2 连通。
+3. 执行测试项 F，分别记录驱动发布计数与订阅端到达率。
+4. 执行测试项 G，检查关键错误码（3774873620 / incompletely grabbed / Grab was not successful）。
 
 关键日志检查命令:
 

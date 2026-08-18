@@ -132,7 +132,8 @@ if [[ "$START_CAMERA" == true ]]; then
   echo "[INFO] Starting camera node in namespace: /$CAMERA_ID"
   ros2 launch pylon_ros2_camera_wrapper pylon_ros2_camera.launch.py \
     camera_id:="$CAMERA_ID" \
-    config_file:="$CAMERA_CONFIG" &
+    config_file:="$CAMERA_CONFIG" \
+    startup_user_set:=Default &
   CAM_LAUNCH_PID=$!
   sleep 4
 fi

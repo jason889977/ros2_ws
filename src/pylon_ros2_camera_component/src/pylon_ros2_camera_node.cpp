@@ -624,6 +624,7 @@ void PylonROS2CameraNode::initDiagnostics()
   this->diagnostics_updater_.setHardwareID("none");
   this->diagnostics_updater_.add("camera_availability", this, &PylonROS2CameraNode::createDiagnostics);
   this->diagnostics_updater_.add("intrinsic_calibration", this, &PylonROS2CameraNode::createCameraInfoDiagnostics);
+  this->diagnostics_updater_.add("image_publish_rate", this, &PylonROS2CameraNode::createImagePublishDiagnostics);
 
   auto diagnostics_trigger = this->create_wall_timer(2000ms, std::bind(&PylonROS2CameraNode::diagnosticsTimerCallback, this));
 }
@@ -1078,6 +1079,7 @@ void PylonROS2CameraNode::spin()
           cam_info.header.stamp = this->img_raw_msg_.header.stamp;
           // publish via image_transport
           this->img_raw_pub_.publish(this->img_raw_msg_, cam_info);
+          this->image_publish_count_.fetch_add(1, std::memory_order_relaxed);
         }
 
         // this->getNumSubscribersRectImagePub() involves that this->camera_info_manager_->isCalibrated() == true
@@ -4748,6 +4750,42 @@ void PylonROS2CameraNode::createCameraInfoDiagnostics(diagnostic_updater::Diagno
   else
   {
     stat.summaryf(diagnostic_msgs::msg::DiagnosticStatus::ERROR, "No intrinsic calibration found");
+  }
+}
+
+void PylonROS2CameraNode::createImagePublishDiagnostics(diagnostic_updater::DiagnosticStatusWrapper &stat)
+{
+  const auto now = std::chrono::steady_clock::now();
+  const double elapsed = std::chrono::duration<double>(now - this->image_fps_window_start_).count();
+  const std::uint64_t image_publish_count = this->image_publish_count_.load(std::memory_order_relaxed);
+  const std::uint64_t frames_in_window = image_publish_count - this->image_publish_count_at_last_diagnostic_;
+  const double fps = elapsed > 0.0 ? static_cast<double>(frames_in_window) / elapsed : 0.0;
+
+  this->image_fps_window_start_ = now;
+  this->image_publish_count_at_last_diagnostic_ = image_publish_count;
+
+  stat.add("fps", fps);
+  stat.add("frames_in_window", frames_in_window);
+  stat.add("total_frames", image_publish_count);
+  stat.add("subscriber_count", this->img_raw_pub_.getNumSubscribers());
+
+  if (this->img_raw_pub_.getNumSubscribers() == 0)
+  {
+    stat.summary(diagnostic_msgs::msg::DiagnosticStatus::OK, "No image subscribers");
+    RCLCPP_INFO(LOGGER, "Image publish FPS: inactive (no image subscribers)");
+  }
+  else if (frames_in_window == 0)
+  {
+    stat.summary(diagnostic_msgs::msg::DiagnosticStatus::WARN, "No image published in diagnostic window");
+    RCLCPP_WARN(LOGGER, "Image publish FPS: 0.00 (no image published in diagnostic window)");
+  }
+  else
+  {
+    stat.summary(diagnostic_msgs::msg::DiagnosticStatus::OK, "Image publisher is active");
+    RCLCPP_INFO(LOGGER, "Image publish FPS: %.2f (frames=%lu, total=%lu)",
+                fps,
+                static_cast<unsigned long>(frames_in_window),
+                static_cast<unsigned long>(image_publish_count));
   }
 }
 
