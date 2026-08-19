@@ -17,8 +17,8 @@ setup(
     ],
     install_requires=['setuptools'],
     zip_safe=True,
-    maintainer='ubuntu',
-    maintainer_email='ubuntu@todo.todo',
+    maintainer='jason889977',
+    maintainer_email='jason889977@users.noreply.github.com',
     description='ROS 2 AprilTag pose reader that republishes TF detections as pose topics.',
     license='BSD-3-Clause',
     extras_require={

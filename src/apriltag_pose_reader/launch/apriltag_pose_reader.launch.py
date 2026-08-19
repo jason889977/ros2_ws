@@ -21,6 +21,8 @@ def _launch(context):
     lookup_parent_frame = LaunchConfiguration('lookup_parent_frame').perform(context)
     lookup_rate_hz = LaunchConfiguration('lookup_rate_hz').perform(context)
     health_log_interval_s = LaunchConfiguration('health_log_interval_s').perform(context)
+    publish_all_tags = LaunchConfiguration('publish_all_tags').perform(context)
+    tag_timeout_s = LaunchConfiguration('tag_timeout_s').perform(context)
 
     actions = []
 
@@ -54,6 +56,8 @@ def _launch(context):
                 'lookup_parent_frame': lookup_parent_frame,
                 'lookup_rate_hz': float(lookup_rate_hz),
                 'health_log_interval_s': float(health_log_interval_s),
+                'publish_all_tags': publish_all_tags.lower() == 'true',
+                'tag_timeout_s': float(tag_timeout_s),
                 'output_pose_topic': '/apriltag/pose',
                 'output_transform_topic': '/apriltag/transform',
                 'subscribe_detections': True,
@@ -122,6 +126,16 @@ def generate_launch_description():
             'health_log_interval_s',
             default_value='10.0',
             description='健康状态日志周期（秒），小于等于 0 表示关闭。',
+        ),
+        DeclareLaunchArgument(
+            'publish_all_tags',
+            default_value='false',
+            description='主动查询模式下是否发布所有当前有效的标签。',
+        ),
+        DeclareLaunchArgument(
+            'tag_timeout_s',
+            default_value='1.0',
+            description='自动发现标签的有效期（秒），小于等于 0 表示不过期。',
         ),
         OpaqueFunction(function=_launch),
     ])

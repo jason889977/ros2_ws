@@ -27,6 +27,8 @@ from __future__ import annotations
 # 允许在类型注解中使用尚未定义的类（如用引号包裹的前向引用），Python 3.7+ 支持
 
 from typing import Optional, Set
+
+import time
 # Optional[X] 等价于 X 或 None
 # Set[X] 表示元素类型为 X 的集合
 
@@ -93,6 +95,12 @@ class AprilTagPoseReader(Node):
         # 指定要跟踪的标签坐标系名称（如 "tag36h11:0"）
         # 留空表示自动从检测结果中推断
 
+        self.declare_parameter('publish_all_tags', False)
+        # 主动查询模式下是否发布所有当前仍有效的标签
+
+        self.declare_parameter('tag_timeout_s', 1.0)
+        # 自动发现的标签在多长时间没有检测后失效；显式 tag_frame_id 不受影响
+
         self.declare_parameter('tag_family', '')
         # 标签族名称（如 "tag36h11"），配合 tag_id 使用
         # 留空表示自动推断
@@ -140,6 +148,8 @@ class AprilTagPoseReader(Node):
         self._health_log_interval_s = float(self.get_parameter('health_log_interval_s').value)
         self._publish_detection_logs = bool(self.get_parameter('publish_detection_logs').value)
         self._subscribe_detections = bool(self.get_parameter('subscribe_detections').value)
+        self._publish_all_tags = bool(self.get_parameter('publish_all_tags').value)
+        self._tag_timeout_s = float(self.get_parameter('tag_timeout_s').value)
 
         # ------------------------------------------------------------------
         # 创建发布器（Publisher）
@@ -164,6 +174,8 @@ class AprilTagPoseReader(Node):
         self._known_tag_frames: Set[str] = set()
         # 已知的标签坐标系名称集合，如 {"tag36h11:0", "tag36h11:1"}
         # 每当检测到新标签时更新
+
+        self._tag_last_seen: dict[str, float] = {}
 
         self._latest_frame_hint: Optional[str] = None
         # 最近一次检测到的标签坐标系名称，用于自动推断要跟踪的目标
@@ -284,8 +296,17 @@ class AprilTagPoseReader(Node):
             return {self._tag_frame_id}
         if self._tag_family and self._tag_id >= 0:
             return {f'{self._tag_family}:{self._tag_id}'}
-        if self._latest_frame_hint:
+        if self._tag_timeout_s > 0.0:
+            now = time.monotonic()
+            self._known_tag_frames = {
+                frame_id for frame_id in self._known_tag_frames
+                if now - self._tag_last_seen.get(frame_id, 0.0) <= self._tag_timeout_s
+            }
+        if self._publish_all_tags:
+            return set(self._known_tag_frames)
+        if self._latest_frame_hint in self._known_tag_frames:
             return {self._latest_frame_hint}
+        self._latest_frame_hint = None
         return set(self._known_tag_frames)
 
     def _publish_transform(self, transform: TransformStamped) -> None:
@@ -348,6 +369,7 @@ class AprilTagPoseReader(Node):
                 continue
             # 记录到已知集合中
             self._known_tag_frames.add(frame_id)
+            self._tag_last_seen[frame_id] = time.monotonic()
             # 更新最新提示
             self._latest_frame_hint = frame_id
             if self._publish_detection_logs:
@@ -426,7 +448,8 @@ class AprilTagPoseReader(Node):
                 # 变换可能还没到达，跳过继续尝试下一个候选
                 continue
             self._publish_transform(transform)
-            return  # 成功发布一个就返回，等下次定时器再查
+            if not self._publish_all_tags:
+                return  # 单目标模式成功发布一个即可
 
         # 所有候选都查找失败
         self.get_logger().warn(

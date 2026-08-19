@@ -5,10 +5,21 @@
   ros__parameters:
     # Basler 相机发布的图像话题名称
     # 使用 `ros2 topic list` 查看实际话题名
-    image_topic: "/camera/image_raw"
+    image_topic: "/my_camera/pylon_ros2_camera_node/image_raw"
 
     # WeChatQR 模型文件目录（留空则使用功能包内默认 models/ 路径）
     model_dir: ""
 
     # 图像订阅队列大小
     queue_size: 10
+
+    # 优先使用 WeChatQR 深度学习检测器（对模糊/小尺寸/遮挡 QR 码更鲁棒）
+    prefer_wechat_qr: true
+
+    # 是否使用相机标定信息（内参矩阵 + 畸变系数），启用后发布 QR 码位姿
+    camera_info_topic: "/my_camera/pylon_ros2_camera_node/camera_info"
+
+    use_camera_info: true
+
+    # 同一二维码结果的重复发布抑制时间（秒），设为 0 禁用
+    deduplicate_window_s: 0.5

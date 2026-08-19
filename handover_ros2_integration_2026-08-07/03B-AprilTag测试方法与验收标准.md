@@ -16,7 +16,7 @@
 - 相机型号与 DeviceUserID:
 - 配置文件: aca2500_106611_18.yaml
 - startup_user_set: Default
-- 图像规格: Mono8, 2590x1942
+- 图像规格: Mono8, 1294x970, binning 2x2
 - 标签信息（family/id）:
 - 场景说明:
 
@@ -41,14 +41,14 @@ cd /home/ubuntu/ros2_ws
 source /opt/ros/humble/setup.bash
 source install/setup.bash
 ros2 node list
-ros2 topic info -v /my_camera/pylon_ros2_camera_node/image_raw
+ros2 topic info -v /bridge/image_raw
 ```
 
 通过判据:
 - 存在节点 /my_camera/pylon_ros2_camera_node
 - 存在节点 /apriltag
 - 存在节点 /apriltag_pose_reader
-- image_raw: Publisher count >= 1
+- /bridge/image_raw: 能实际收到消息
 
 不通过判据:
 - 相机或 AprilTag 节点缺失
@@ -134,18 +134,17 @@ rviz2
 命令:
 
 ```bash
-ros2 topic hz /my_camera/pylon_ros2_camera_node/image_raw
+ros2 topic hz /bridge/image_raw
 ros2 topic echo /diagnostics
 ```
 
 通过判据:
-- 驱动 `Image publish FPS` 日志或 `/diagnostics` 发布计数约为 14-15 FPS
+- 驱动容器日志持续输出 `Image publish FPS`
 - 图像流持续，无明显中断
 - `ros2 topic hz` 单独记录为订阅端到达率，不要求等于驱动发布计数
 
 说明:
-- 全分辨率 Mono8 单帧约 5 MB，当前 `ros2 topic hz` 测试约为 6.65 Hz
-- 驱动发布计数正常而订阅端到达率较低时，优先检查 DDS、主机负载和订阅端处理
+- `/bridge/image_raw` 到达率受 JPEG 桥接和宿主机负载影响；仅看到容器原始 publisher 不算通过
 
 ## 9. 测试项 G: 关键错误码守门
 

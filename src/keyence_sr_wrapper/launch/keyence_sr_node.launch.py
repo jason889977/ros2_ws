@@ -15,6 +15,11 @@ def generate_launch_description():
         default_value='9004',
         description='TCP port of Keyence SR scanner',
     )
+    reconnect_interval_arg = DeclareLaunchArgument(
+        'reconnect_interval_s',
+        default_value='5.0',
+        description='Seconds between reconnect attempts when scanner is offline',
+    )
 
     scanner_node = Node(
         package='keyence_sr_wrapper',
@@ -25,6 +30,7 @@ def generate_launch_description():
             {
                 'scanner_ip': LaunchConfiguration('scanner_ip'),
                 'scanner_port': LaunchConfiguration('scanner_port'),
+                'reconnect_interval_s': LaunchConfiguration('reconnect_interval_s'),
             }
         ],
     )
@@ -32,5 +38,6 @@ def generate_launch_description():
     return LaunchDescription([
         scanner_ip_arg,
         scanner_port_arg,
+        reconnect_interval_arg,
         scanner_node,
     ])

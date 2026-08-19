@@ -1,6 +1,5 @@
 # component id; it must be unique among all registered components
-# @TODO: use on one topic and identify by id
-#string component_id
+string component_id
 
 # the official status id of the component
 # possible values are

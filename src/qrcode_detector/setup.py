@@ -31,8 +31,8 @@ setup(
     ] + model_files,
     install_requires=['setuptools'],
     zip_safe=True,
-    maintainer='ubuntu',
-    maintainer_email='ubuntu@todo.todo',
+    maintainer='jason889977',
+    maintainer_email='jason889977@users.noreply.github.com',
     description='ROS 2 二维码识别节点，基于 OpenCV WeChatQRCode，适配 Basler 相机',
     license='BSD-3-Clause',
     extras_require={

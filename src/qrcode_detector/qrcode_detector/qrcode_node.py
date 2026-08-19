@@ -39,6 +39,7 @@ QR 码检测节点（ROS 2）
 # ============================================================================
 
 import os
+import time
 # Python 标准库：操作系统相关功能（路径拼接、文件存在性检查等）
 
 from ament_index_python.packages import get_package_share_directory
@@ -69,7 +70,7 @@ from rclpy.node import Node
 # Node 是 ROS 2 节点的基类。
 # 节点是 ROS 2 中的最小计算单元，拥有自己的参数、话题、服务等。
 
-from sensor_msgs.msg import Image
+from sensor_msgs.msg import Image, CameraInfo
 # sensor_msgs/Image 是 ROS 2 中图像消息的标准类型。
 # 包含字段：
 #   header   — 时间戳 + 坐标系
@@ -77,10 +78,18 @@ from sensor_msgs.msg import Image
 #   width    — 图像宽度（像素）
 #   encoding — 像素编码（如 "bgr8", "mono8", "rgb8"）
 #   data     — 原始像素数据（一维字节数组）
+# sensor_msgs/CameraInfo 包含相机内参矩阵和畸变系数。
 
 from std_msgs.msg import String
 # std_msgs/String 是最简单的 ROS 2 消息类型之一。
 # 只有一个字段 data（字符串），用于传递文本信息。
+
+from geometry_msgs.msg import PoseStamped
+# geometry_msgs/PoseStamped 带时间戳和坐标系的位姿消息（位置 xyz + 四元数姿态 xyzw）。
+# 用于发布 QR 码的 6D 位姿估计结果。
+
+import numpy as np
+# NumPy 用于矩阵运算，solvePnP 需要 numpy 数组作为输入。
 
 
 # ============================================================================
@@ -113,7 +122,10 @@ class WeChatQRNode(Node):
         #   - 也可通过命令行 ros2 run ... --ros-args -p 参数名:=值 覆盖
         #   - 运行时可通过 ros2 param set 动态修改（需节点支持）
 
-        self.declare_parameter('image_topic', '/camera/image_raw')
+        self.declare_parameter(
+            'image_topic',
+            '/my_camera/pylon_ros2_camera_node/image_raw',
+        )
         # 订阅的相机图像话题名。
         # 默认 '/camera/image_raw' 是 Basler 相机驱动发布的原始图像话题。
 
@@ -128,12 +140,25 @@ class WeChatQRNode(Node):
 
         self.declare_parameter('use_camera_info', False)
         # 是否使用相机标定信息（内参矩阵、畸变系数）。
-        # 当前版本未实现此功能，仅为预留参数。
+        # 启用后，节点会订阅 camera_info 话题，结合 QR 码角点做 solvePnP
+        # 位姿估计，发布 ~/qr_pose (PoseStamped)。
+
+        self.declare_parameter(
+            'camera_info_topic',
+            '/my_camera/pylon_ros2_camera_node/camera_info',
+        )
+        # 相机标定信息话题名（sensor_msgs/CameraInfo）。
+
+        self.declare_parameter('qr_size_m', 0.10)
+        # QR 码的物理边长（米），用于 solvePnP 的 3D 物体点定义。
+        # 默认 0.10m = 10cm，根据实际 QR 码尺寸调整。
 
         self.declare_parameter('prefer_wechat_qr', False)
         # 是否优先使用 WeChatQR 深度学习检测器。
         # False（默认）→ 使用 OpenCV 内置的 QRCodeDetector（轻量，无需模型）
         # True → 尝试加载 WeChatQR 模型，加载失败则自动降级为 OpenCV 检测器
+
+        self.declare_parameter('deduplicate_window_s', 0.5)
 
         # ==================================================================
         # 读取参数值到局部变量
@@ -143,14 +168,19 @@ class WeChatQRNode(Node):
         image_topic = self.get_parameter('image_topic').value
         model_dir = self.get_parameter('model_dir').value
         queue_size = self.get_parameter('queue_size').value
-        use_camera_info = self.get_parameter('use_camera_info').value
+        self._use_camera_info = self.get_parameter('use_camera_info').value
+        camera_info_topic = self.get_parameter('camera_info_topic').value
+        self._qr_size_m = self.get_parameter('qr_size_m').value
         prefer_wechat_qr = self.get_parameter('prefer_wechat_qr').value
+        self._deduplicate_window_s = float(
+            self.get_parameter('deduplicate_window_s').value
+        )
+        self._last_published_at = {}
 
-        # 如果用户启用了 use_camera_info，打印警告（当前未实现）
-        if use_camera_info:
-            self.get_logger().warn(
-                '参数 use_camera_info 当前未启用，将被忽略。'
-            )
+        # 相机内参（从 CameraInfo 消息中填充）
+        self._camera_matrix = None   # 3x3 numpy 数组
+        self._dist_coeffs = None     # 畸变系数 numpy 数组
+        self._camera_frame_id = ''   # 相机坐标系名称
 
         # ==================================================================
         # 初始化 CvBridge
@@ -199,6 +229,25 @@ class WeChatQRNode(Node):
             self.image_callback,  # 回调函数：收到图像时执行
             queue_size,     # 队列大小（从参数读取）
         )
+
+        # ==================================================================
+        # CameraInfo 订阅 + 位姿发布（use_camera_info 功能）
+        # ==================================================================
+        self._camera_info_sub = None
+        self._pose_pub = None
+
+        if self._use_camera_info:
+            self._pose_pub = self.create_publisher(PoseStamped, '~/qr_pose', 10)
+            self._camera_info_sub = self.create_subscription(
+                CameraInfo,
+                camera_info_topic,
+                self._camera_info_callback,
+                10,
+            )
+            self.get_logger().info(
+                f'use_camera_info 已启用，订阅 {camera_info_topic}，'
+                f'qr_size_m={self._qr_size_m}'
+            )
 
         # 启动日志
         self.get_logger().info(
@@ -292,6 +341,114 @@ class WeChatQRNode(Node):
         return cv.wechat_qrcode.WeChatQRCode(*paths), 'wechat'
 
     # ======================================================================
+    # CameraInfo 回调
+    # ======================================================================
+
+    def _camera_info_callback(self, msg: CameraInfo):
+        """
+        接收相机标定信息，提取内参矩阵和畸变系数。
+
+        CameraInfo 消息中的 K 字段是 3x3 内参矩阵（行优先 9 元素），
+        D 字段是畸变系数。只需接收一次即可（相机内参不会动态变化）。
+        """
+        if self._camera_matrix is not None:
+            return
+        self._camera_matrix = np.array(msg.k, dtype=np.float64).reshape(3, 3)
+        self._dist_coeffs = np.array(msg.d, dtype=np.float64)
+        self._camera_frame_id = msg.header.frame_id
+        self.get_logger().info(
+            f'相机内参已加载 (frame={self._camera_frame_id}): '
+            f'fx={self._camera_matrix[0,0]:.1f}, fy={self._camera_matrix[1,1]:.1f}, '
+            f'cx={self._camera_matrix[0,2]:.1f}, cy={self._camera_matrix[1,2]:.1f}'
+        )
+
+    # ======================================================================
+    # 位姿估计（solvePnP）
+    # ======================================================================
+
+    def _estimate_pose(self, corners_2d, header):
+        """
+        用 QR 码的 4 个像素角点 + 已知物理尺寸，通过 solvePnP 计算 6D 位姿。
+
+        参数:
+            corners_2d: numpy array，形状 (4, 2)，QR 码四个角点的像素坐标
+            header:     ROS 标准 header（用于时间戳和坐标系）
+
+        返回:
+            PoseStamped 消息，或 None（内参未就绪时）
+        """
+        if self._camera_matrix is None:
+            return None
+
+        s = self._qr_size_m
+        # QR 码 3D 物体点（以 QR 码中心为原点，Z 轴朝上）
+        # 角点顺序：左上、右上、右下、左下（与 QR 码检测器输出一致）
+        object_points = np.array([
+            [-s / 2,  s / 2, 0.0],
+            [ s / 2,  s / 2, 0.0],
+            [ s / 2, -s / 2, 0.0],
+            [-s / 2, -s / 2, 0.0],
+        ], dtype=np.float64)
+
+        image_points = corners_2d.reshape(4, 2).astype(np.float64)
+
+        success, rvec, tvec = cv.solvePnP(
+            object_points, image_points,
+            self._camera_matrix, self._dist_coeffs,
+        )
+
+        if not success:
+            self.get_logger().warn('solvePnP 未收敛，跳过本帧位姿估计')
+            return None
+
+        # 将旋转向量转换为四元数
+        rotation_matrix, _ = cv.Rodrigues(rvec)
+        quat = self._rotation_matrix_to_quaternion(rotation_matrix)
+
+        pose = PoseStamped()
+        pose.header.stamp = header.stamp
+        pose.header.frame_id = self._camera_frame_id or header.frame_id
+        pose.pose.position.x = float(tvec[0])
+        pose.pose.position.y = float(tvec[1])
+        pose.pose.position.z = float(tvec[2])
+        pose.pose.orientation.x = quat[0]
+        pose.pose.orientation.y = quat[1]
+        pose.pose.orientation.z = quat[2]
+        pose.pose.orientation.w = quat[3]
+
+        return pose
+
+    @staticmethod
+    def _rotation_matrix_to_quaternion(R):
+        """将 3x3 旋转矩阵转换为四元数 (x, y, z, w)。"""
+        trace = R[0, 0] + R[1, 1] + R[2, 2]
+        if trace > 0:
+            s = 0.5 / np.sqrt(trace + 1.0)
+            w = 0.25 / s
+            x = (R[2, 1] - R[1, 2]) * s
+            y = (R[0, 2] - R[2, 0]) * s
+            z = (R[1, 0] - R[0, 1]) * s
+        elif R[0, 0] > R[1, 1] and R[0, 0] > R[2, 2]:
+            s = 2.0 * np.sqrt(1.0 + R[0, 0] - R[1, 1] - R[2, 2])
+            w = (R[2, 1] - R[1, 2]) / s
+            x = 0.25 * s
+            y = (R[0, 1] + R[1, 0]) / s
+            z = (R[0, 2] + R[2, 0]) / s
+        elif R[1, 1] > R[2, 2]:
+            s = 2.0 * np.sqrt(1.0 + R[1, 1] - R[0, 0] - R[2, 2])
+            w = (R[0, 2] - R[2, 0]) / s
+            x = (R[0, 1] + R[1, 0]) / s
+            y = 0.25 * s
+            z = (R[1, 2] + R[2, 1]) / s
+        else:
+            s = 2.0 * np.sqrt(1.0 + R[2, 2] - R[0, 0] - R[1, 1])
+            w = (R[1, 0] - R[0, 1]) / s
+            x = (R[0, 2] + R[2, 0]) / s
+            y = (R[1, 2] + R[2, 1]) / s
+            z = 0.25 * s
+        return (x, y, z, w)
+
+    # ======================================================================
     # QR 码解码
     # ======================================================================
 
@@ -307,52 +464,60 @@ class WeChatQRNode(Node):
             cv_image: numpy ndarray，BGR 格式的图像（由 CvBridge 转换而来）
 
         返回:
-            list[str] — 解码得到的字符串列表。
-                        如果图像中没有 QR 码，返回空列表 []。
+            (decoded_info, points_list) 元组：
+              decoded_info — list[str]，解码得到的字符串列表
+              points_list  — list[numpy array]，每个 QR 码的四个角点坐标 (4,2)
+                             如果检测器不提供角点，对应位置为 None
         """
 
         # ---- WeChatQR 后端 ----
         if self.detector_kind == 'wechat':
-            # WeChatQRCode.detectAndDecode(image) 返回:
-            #   (decoded_info, points)
-            #   decoded_info — tuple of str，每个 QR 码的解码文本
-            #   points       — numpy array，每个 QR 码的四个角点坐标
-            # 我们只需要 decoded_info，不需要角点，所以用 _ 忽略第二个返回值
-            decoded_info, _ = self.detector.detectAndDecode(cv_image)
+            decoded_info, points = self.detector.detectAndDecode(cv_image)
 
-            # WeChatQR 在只检测到一个 QR 码时，可能返回 str 而非 tuple
             if isinstance(decoded_info, str):
-                # 如果是字符串且非空，包装成单元素列表返回
-                return [decoded_info] if decoded_info else []
-            # 如果是 tuple/list，过滤掉空字符串后返回
-            return [info for info in decoded_info if info]
+                decoded_list = [decoded_info] if decoded_info else []
+                pts_list = [points] if decoded_info and points is not None else []
+                return decoded_list, pts_list
+
+            decoded_list = [info for info in decoded_info if info]
+            pts_list = []
+            if points is not None:
+                for i, info in enumerate(decoded_info):
+                    if info and i < len(points):
+                        pts_list.append(np.array(points[i], dtype=np.float64))
+            return decoded_list, pts_list
 
         # ---- OpenCV 后端 ----
-        # OpenCV 4.5.4+ 的 QRCodeDetector 支持 detectAndDecodeMulti()
-        # 可以同时检测和解码图像中的多个 QR 码
         if hasattr(self.detector, 'detectAndDecodeMulti'):
-            # detectAndDecodeMulti(image) 返回:
-            #   (retval, decoded_info)
-            #   retval      — bool，是否成功检测到
-            #   decoded_info — tuple of str
-            # 有些版本返回 (retval, decoded_info, points) 三元组
             result = self.detector.detectAndDecodeMulti(cv_image)
             if isinstance(result, tuple) and len(result) >= 2:
                 decoded_info = result[1]
-                return [info for info in decoded_info if info]
+                decoded_list = [info for info in decoded_info if info]
+                pts_list = []
+                if len(result) >= 3 and result[2] is not None:
+                    raw_pts = result[2]
+                    for i, info in enumerate(decoded_info):
+                        if info and i < len(raw_pts):
+                            pts_list.append(np.array(raw_pts[i], dtype=np.float64))
+                return decoded_list, pts_list
 
-        # 旧版 OpenCV 没有 detectAndDecodeMulti，退回单码检测
-        # detectAndDecode(image) 返回:
-        #   (decoded_info, points, straight_qrcode)
-        #   decoded_info     — str，解码文本（无 QR 码时为空字符串）
-        #   points           — numpy array，QR 码角点
-        #   straight_qrcode  — 矫正后的 QR 码图像
-        decoded_info, _, _ = self.detector.detectAndDecode(cv_image)
-        return [decoded_info] if decoded_info else []
+        decoded_info, pts, _ = self.detector.detectAndDecode(cv_image)
+        if decoded_info:
+            pts_list = [np.array(pts, dtype=np.float64)] if pts is not None else []
+            return [decoded_info], pts_list
+        return [], []
 
     # ======================================================================
     # 图像回调函数
     # ======================================================================
+
+    def _should_publish(self, info: str) -> bool:
+        if self._deduplicate_window_s <= 0.0:
+            return True
+        now = time.monotonic()
+        previous = self._last_published_at.get(info)
+        self._last_published_at[info] = now
+        return previous is None or now - previous >= self._deduplicate_window_s
 
     def image_callback(self, msg: Image):
         """
@@ -381,23 +546,33 @@ class WeChatQRNode(Node):
 
         # ---- 步骤 2：QR 码检测与解码 ----
         try:
-            decoded_info = self._decode_qr(cv_image)
+            decoded_info, points_list = self._decode_qr(cv_image)
         except Exception as e:
-            # 可能的异常：模型推理错误、内存不足等
             self.get_logger().error(f'二维码检测失败: {e}')
             return
 
         # ---- 步骤 3：发布解码结果 ----
         if decoded_info:
-            for info in decoded_info:
-                # 在终端打印识别结果（方便调试）
+            for i, info in enumerate(decoded_info):
+                if not self._should_publish(info):
+                    continue
                 self.get_logger().info(f'✅ 识别到二维码: {info}')
-                # 构造 ROS String 消息并发布
                 str_msg = String()
                 str_msg.data = info
-                # publish() 将消息发送到 ~/decoded_info 话题
-                # 所有订阅了该话题的节点都会收到这条消息
                 self.result_pub.publish(str_msg)
+
+                # 位姿估计（use_camera_info 启用时）
+                if self._pose_pub is not None and i < len(points_list):
+                    corners = points_list[i]
+                    if corners is not None and corners.shape == (4, 2):
+                        pose = self._estimate_pose(corners, msg.header)
+                        if pose is not None:
+                            self._pose_pub.publish(pose)
+                            self.get_logger().info(
+                                f'📐 QR 位姿: x={pose.pose.position.x:.3f} '
+                                f'y={pose.pose.position.y:.3f} '
+                                f'z={pose.pose.position.z:.3f}'
+                            )
 
 
 # ============================================================================

@@ -1,4 +1,5 @@
-FROM osrf/ros:humble-ros-base-jammy
+ARG BASE_IMAGE=osrf/ros:humble-ros-base-jammy
+FROM ${BASE_IMAGE}
 
 ARG DEBIAN_FRONTEND=noninteractive
 ENV ROS_DISTRO=humble
@@ -8,6 +9,8 @@ ENV GENICAM_GENTL64_PATH=/opt/pylon/lib/gentlproducer/gtl
 RUN apt-get update && apt-get install -y --no-install-recommends \
     build-essential cmake git python3-colcon-common-extensions python3-rosdep \
     libopencv-dev libyaml-cpp-dev \
+    python3-opencv python3-yaml \
+    ros-humble-apriltag-ros ros-humble-apriltag-msgs \
     ros-humble-camera-info-manager ros-humble-cv-bridge \
     ros-humble-diagnostic-updater ros-humble-image-geometry \
     ros-humble-image-transport ros-humble-pcl-ros \
@@ -31,7 +34,7 @@ COPY deploy/basler_camera/*.sh deploy/basler_camera/
 COPY deploy/basler_camera/README.md deploy/basler_camera/ROS2-INTERFACE.md deploy/basler_camera/CHANGELOG.md deploy/basler_camera/
 
 RUN . /opt/ros/humble/setup.sh && \
-    colcon build --symlink-install --packages-up-to pylon_ros2_camera_wrapper
+    colcon build --symlink-install
 
 COPY deploy/basler_camera/entrypoint.sh /entrypoint.sh
 RUN chmod +x /entrypoint.sh deploy/basler_camera/*.sh

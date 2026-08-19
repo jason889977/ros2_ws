@@ -4,7 +4,7 @@
   <name>apriltag_pose_reader</name>
   <version>0.1.0</version>
   <description>ROS 2 AprilTag pose reader that relays apriltag_ros TF output into simple pose topics.</description>
-  <maintainer email="ubuntu@todo.todo">ubuntu</maintainer>
+  <maintainer email="jason889977@users.noreply.github.com">jason889977</maintainer>
   <license>BSD-3-Clause</license>
 
   <exec_depend>rclpy</exec_depend>

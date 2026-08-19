@@ -14,5 +14,7 @@
     exposure: 10000.0
     grab_timeout: 1000
     grab_strategy: 1
+    binning_x: 2
+    binning_y: 2
     mtu_size: 1500
     inter_pkg_delay: 0

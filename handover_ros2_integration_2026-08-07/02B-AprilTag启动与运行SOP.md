@@ -1,182 +1,51 @@
 # AprilTag 启动与运行 SOP
 
-## 1. 适用范围
+## 1. 启动统一容器
 
-本 SOP 仅用于“相机 + AprilTag 检测与位姿读取”链路。
-不包含二维码识别节点启动与 decoded_info 验证步骤。
+按 [02-启动与运行SOP.md](02-启动与运行SOP.md) 启动统一容器。生产模式不启动 TCP 图像桥：
 
-## 2. 统一前置
+1. `sudo -n docker restart basler_camera`
+2. 确认容器 `healthy`。
+3. 确认容器内原始图像为 Mono8、`1294x970`、`binning_x/y=2`。
+4. 容器执行 `industrial_vision_bringup/vision_pipeline.launch.py`。
+5. 算法直接订阅容器内相机原始话题。
 
-在每个终端先执行:
-
-```bash
-cd /home/ubuntu/ros2_ws
-source /opt/ros/humble/setup.bash
-source install/setup.bash
-```
-
-## 3. 标准启动
-
-### 终端1: 启动相机
+## 2. 单独调试 AprilTag（仅在统一 pipeline 未启用时）
 
 ```bash
 cd /home/ubuntu/ros2_ws
 source /opt/ros/humble/setup.bash
 source install/setup.bash
-ros2 launch pylon_ros2_camera_wrapper pylon_ros2_camera.launch.py \
-  config_file:=/home/ubuntu/ros2_ws/src/pylon_ros2_camera_wrapper/config/aca2500_106611_18.yaml \
-  startup_user_set:=Default
-```
-
-### 终端2: 启动 AprilTag 检测与位姿读取
-
-```bash
-cd /home/ubuntu/ros2_ws
-source /opt/ros/humble/setup.bash
-source install/setup.bash
-ros2 launch apriltag_pose_reader apriltag_pose_reader.launch.py
-```
-
-常用参数（可选）:
-
-- `lookup_parent_frame:=<frame>`: 指定 TF 查询父坐标系；不指定时自动使用最近一次 TF 消息中的父坐标系
-- `lookup_rate_hz:=<hz>`: 大于 0 时启用 TF buffer 周期性回查发布
-- `health_log_interval_s:=<sec>`: 健康日志周期，设为 `0` 或负值可关闭
-
-示例:
-
-```bash
 ros2 launch apriltag_pose_reader apriltag_pose_reader.launch.py \
-  lookup_parent_frame:=map \
-  lookup_rate_hz:=2.0 \
-  health_log_interval_s:=10.0
+  image_topic:=/my_camera/pylon_ros2_camera_node/image_raw \
+  camera_info_topic:=/my_camera/pylon_ros2_camera_node/camera_info \
+  lookup_parent_frame:=basler_aca2500_106611_18
 ```
 
-### 终端3: 验证链路
+## 3. 验证检测和位姿
 
 ```bash
-cd /home/ubuntu/ros2_ws
-source /opt/ros/humble/setup.bash
-source install/setup.bash
-ros2 node list
 ros2 topic echo /detections --once
 ros2 topic echo /apriltag/pose --once
 ros2 topic echo /apriltag/transform --once
 ```
 
-相机图像 FPS 查询：
+现场已验证目标为 `tag36h11`、ID `3`，`hamming=0`，`decision_margin` 约 `46-48`。Transform 的父 frame 应为 `basler_aca2500_106611_18`，子 frame 应为 `tag36h11:3`。
+
+## 4. TF2 和 RViz
 
 ```bash
-ros2 topic hz /my_camera/pylon_ros2_camera_node/image_raw
-ros2 topic echo /diagnostics
+ros2 run tf2_ros tf2_echo basler_aca2500_106611_18 tag36h11:3
 ```
 
-相机节点定期在日志中输出 `Image publish FPS`，并在 `/diagnostics` 的
-`image_publish_rate` 项中提供 `fps`、窗口帧数和累计帧数。这是驱动发布计数，
-当前全分辨率硬件实测约 14-15 FPS，不是配置参数 `frame_rate` 的目标值。
+RViz 图像应选择 `/my_camera/pylon_ros2_camera_node/image_raw`，图像 QoS 设为 `Reliable`；TF/位姿使用 `/apriltag/transform` 和 `/apriltag/pose`。宿主机兼容模式才使用 `/bridge/image_raw`。
 
-`ros2 topic hz` 会建立订阅者，显示该订阅进程收到消息的速率。全分辨率 Mono8
-单帧约 5 MB，DDS、反序列化和订阅进程调度可能使该值低于驱动发布计数；当前测试
-约为 6.65 Hz。判断相机发布 FPS 时，以 `Image publish FPS` 或 `/diagnostics` 为准。
-
-## 4. 6D 位姿与 TF2 变换验证
-
-AprilTag 检测到的 6D 位姿会同时出现在两个话题:
-
-- /apriltag/pose: geometry_msgs/PoseStamped
-- /apriltag/transform: geometry_msgs/TransformStamped
-
-先读取一次 transform，确认父子坐标系名称:
+## 5. 停止
 
 ```bash
-ros2 topic echo /apriltag/transform --once
+pkill -f 'apriltag_pose_reader|apriltag_node|apriltag_pose_reader.launch.py' || true
+pkill -f 'camera_tcp_bridge.py host' || true
+sudo -n docker stop basler_camera
 ```
 
-输出中重点关注:
-
-- header.frame_id: 父坐标系
-- child_frame_id: 标签坐标系，例如 tag36h11:3
-
-然后用 TF2 持续观测变换:
-
-```bash
-ros2 run tf2_ros tf2_echo <header.frame_id> <child_frame_id>
-```
-
-## 5. 一键脚本
-
-```bash
-# 默认复用已有相机节点，避免设备占用冲突
-/home/ubuntu/ros2_ws/scripts/deploy_and_run_camera_apriltag.sh
-
-# 若需要先自动停掉旧相机再重启
-CAMERA_MODE=restart /home/ubuntu/ros2_ws/scripts/deploy_and_run_camera_apriltag.sh
-```
-
-`restart` 会先发送 `SIGTERM`，等待本机相机进程退出，必要时发送 `SIGKILL`，
-然后等待 10 秒让 GigE 控制锁释放。若此后仍报 `0xE1018006`，说明控制端不在
-当前本机进程中；请关闭连接到 `172.31.0.88` 的其他主机上的 Pylon Viewer 或
-相机程序，再重试。可用 `CAMERA_LOCK_RELEASE_WAIT_S=<秒>` 调整等待时间。
-
-## 6. 手动验收（推荐）
-
-当需要在真实相机上做一次性完整验收（A-G）时，请按以下顺序执行:
-
-1. 执行 [03B-AprilTag测试方法与验收标准.md](03B-AprilTag测试方法与验收标准.md) 的测试项 A-D。
-2. 执行测试项 E，确认 RViz2 标签姿态与 TF2 连通。
-3. 执行测试项 F，分别记录驱动发布计数与订阅端到达率。
-4. 执行测试项 G，检查关键错误码（3774873620 / incompletely grabbed / Grab was not successful）。
-
-关键日志检查命令:
-
-```bash
-latest=$(ls -1t /home/ubuntu/.ros/log/pylon_ros2_camera_wrapper_*.log | head -n 1)
-grep -E "3774873620|incompletely grabbed|Grab was not successful" -i "$latest" || true
-```
-
-## 7. 可选: RViz2 查看标签三维位置
-
-```bash
-cd /home/ubuntu/ros2_ws
-source /opt/ros/humble/setup.bash
-source install/setup.bash
-rviz2
-```
-
-RViz2 建议配置:
-
-- Global Options -> Fixed Frame 设为 map，或设为 /apriltag/transform 中的父坐标系
-- Add -> TF
-- Add -> Pose，Topic 选择 /apriltag/pose
-- 如需叠加图像，Add -> Image，Topic 选择 /my_camera/pylon_ros2_camera_node/image_raw
-
-## 8. 相机标定（仅当链路提示未标定时）
-
-```bash
-# 先确保相机节点已启动，然后执行标定脚本
-/home/ubuntu/ros2_ws/scripts/calibrate_basler_camera_and_apply.sh
-
-# 标定完成后重建并重启 AprilTag 链路
-cd /home/ubuntu/ros2_ws
-source /opt/ros/humble/setup.bash
-colcon build --packages-select pylon_ros2_camera_wrapper --symlink-install
-source install/setup.bash
-/home/ubuntu/ros2_ws/scripts/deploy_and_run_camera_apriltag.sh
-```
-
-## 9. 快速判定规则
-
-- 相机正常: /my_camera/pylon_ros2_camera_node 存在
-- 检测正常: /detections 有持续输出
-- AprilTag 位姿正常: /apriltag/pose 或 /apriltag/transform 有持续输出
-- TF2 正常: tf2_echo 能持续输出变换
-- RViz2 正常: TF 与 Pose 能看到标签三维位置变化
-
-## 10. 停止流程
-
-```bash
-pkill -f "apriltag_pose_reader|apriltag_node|apriltag_pose_reader.launch.py" || true
-pkill -f "pylon_ros2_camera_node|pylon_ros2_camera.launch.py" || true
-```
-
-按先停 AprilTag、再停相机执行。
+不要使用宿主机 `ros2 launch pylon_ros2_camera_wrapper` 或 `pkill pylon_ros2_camera_node` 管理容器内相机。

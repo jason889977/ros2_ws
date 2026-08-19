@@ -6,6 +6,7 @@ import rclpy
 from rclpy.node import Node
 from std_msgs.msg import String
 from std_srvs.srv import Trigger
+from rcl_interfaces.msg import SetParametersResult
 
 
 # 定义基恩士扫码器 ROS 2 节点类，继承自 rclpy.node.Node
@@ -26,12 +27,16 @@ class KeyenceSRNode(Node):
         # 声明一个名为 'scanner_port' 的 ROS 参数，类型为整数，默认值为 9004
         # 9004 是基恩士 SR 系列扫码器默认的 TCP 通信端口
         self.declare_parameter('scanner_port', 9004)
+        self.declare_parameter('reconnect_interval_s', 5.0)
 
         # 从参数服务器中获取 'scanner_ip' 参数的实际值（可能是默认值，也可能是用户覆盖后的值），赋给实例变量
         self.scanner_ip = self.get_parameter('scanner_ip').value
         
         # 从参数服务器中获取 'scanner_port' 参数的实际值，赋给实例变量
         self.scanner_port = self.get_parameter('scanner_port').value
+        self.reconnect_interval_s = float(
+            self.get_parameter('reconnect_interval_s').value
+        )
 
         # ---- TCP 连接初始化 ----
 
@@ -53,6 +58,14 @@ class KeyenceSRNode(Node):
         #   - 服务类型: Trigger，请求为空，响应包含 success(bool) 和 message(string)
         #   - 回调函数: trigger_scan_callback，当有客户端调用此服务时自动执行
         self.srv = self.create_service(Trigger, '/scanner/trigger', self.trigger_scan_callback)
+
+        # 注册参数变更回调，支持运行时修改 scanner_ip / scanner_port 后自动重连
+        self.add_on_set_parameters_callback(self._on_parameter_changed)
+        if self.reconnect_interval_s > 0.0:
+            self.create_timer(
+                self.reconnect_interval_s,
+                self._reconnect_if_needed,
+            )
 
         # 在终端输出启动日志信息，包含扫码器的 IP 地址和端口号，方便调试和确认配置是否正确
         self.get_logger().info(
@@ -91,6 +104,30 @@ class KeyenceSRNode(Node):
             # 后续 trigger_scan_callback 会检查此变量，若为 None 则直接返回失败
             self.client_socket = None
 
+    def _on_parameter_changed(self, params):
+        """参数变更回调：检测 scanner_ip / scanner_port 变化后自动重连。"""
+        need_reconnect = False
+        for param in params:
+            if param.name == 'scanner_ip' and param.value != self.scanner_ip:
+                self.scanner_ip = param.value
+                need_reconnect = True
+                self.get_logger().info(f'参数 scanner_ip 已更新为: {self.scanner_ip}')
+            elif param.name == 'scanner_port' and param.value != self.scanner_port:
+                self.scanner_port = param.value
+                need_reconnect = True
+                self.get_logger().info(f'参数 scanner_port 已更新为: {self.scanner_port}')
+
+        if need_reconnect:
+            self.get_logger().info('正在重新连接扫码器...')
+            self.connect_to_scanner()
+
+        return SetParametersResult(successful=True)
+
+    def _reconnect_if_needed(self):
+        """Retry the connection when the scanner is currently unavailable."""
+        if self.client_socket is None:
+            self.connect_to_scanner()
+
     # 定义服务回调函数：当外部节点调用 '/scanner/trigger' 服务时，此方法被自动调用
     # request: Trigger 服务的请求对象（此处为空，无字段）
     # response: Trigger 服务的响应对象，需要填充 success 和 message 字段后返回
@@ -101,6 +138,9 @@ class KeyenceSRNode(Node):
         del request
 
         # ---- 前置检查：确认扫码器已连接 ----
+
+        if not self.client_socket:
+            self.connect_to_scanner()
 
         if not self.client_socket:
             response.success = False
@@ -150,6 +190,8 @@ class KeyenceSRNode(Node):
             # 可能原因：扫码器忙、网络延迟过高、扫码器故障等
             response.success = False
             response.message = 'Timeout: Scanner did not respond in time.'
+            self.client_socket.close()
+            self.client_socket = None
 
         except Exception as e:
             # 捕获所有其他异常（如连接断开、数据解码错误等）

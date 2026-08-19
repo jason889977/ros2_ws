@@ -4,10 +4,11 @@
   <name>qrcode_detector</name>
   <version>0.1.0</version>
   <description>ROS 2 二维码识别节点，基于 OpenCV WeChatQRCode 算法，适配 Basler 相机图像话题</description>
-  <maintainer email="ubuntu@todo.todo">ubuntu</maintainer>
+  <maintainer email="jason889977@users.noreply.github.com">jason889977</maintainer>
   <license>BSD-3-Clause</license>
 
   <exec_depend>rclpy</exec_depend>
+  <exec_depend>geometry_msgs</exec_depend>
   <exec_depend>sensor_msgs</exec_depend>
   <exec_depend>std_msgs</exec_depend>
   <exec_depend>cv_bridge</exec_depend>

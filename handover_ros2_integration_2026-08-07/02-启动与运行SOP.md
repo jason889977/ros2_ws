@@ -22,14 +22,40 @@ source install/setup.bash
 
 ```bash
 cd /home/ubuntu/ros2_ws
-source /opt/ros/humble/setup.bash
-source install/setup.bash
-ros2 launch pylon_ros2_camera_wrapper pylon_ros2_camera.launch.py \
-  config_file:=/home/ubuntu/ros2_ws/src/pylon_ros2_camera_wrapper/config/aca2500_106611_18.yaml \
-  startup_user_set:=Default
+sudo -n docker restart basler_camera
+sudo -n docker inspect --format '{{.State.Status}} {{.State.Health.Status}}' basler_camera
 ```
 
-默认配置使用 Mono8、10000 us 曝光和全分辨率 2590x1942；驱动会自动采用当前条件下的最大帧率。
+日常不要在宿主机再次启动 Basler launch，也不要运行会抢占相机的旧一键脚本。容器 profile 必须启用 `binning_x: 2`、`binning_y: 2`，输出应为 Mono8、`1294x970`。
+
+容器内确认原始流:
+
+```bash
+sudo -n docker exec basler_camera bash -lc \
+  'source /opt/ros/humble/setup.bash && source /opt/ros2_ws/install/setup.bash && \
+   timeout 8 ros2 topic hz /my_camera/pylon_ros2_camera_node/image_raw'
+```
+
+旧版宿主机调试才需要启动图像桥；统一容器生产模式不需要 TCP 桥。统一容器启动后直接检查:
+
+```bash
+source /opt/ros/humble/setup.bash
+source /home/ubuntu/ros2_ws/install/setup.bash
+sudo -n docker exec basler_camera bash -lc \
+  'source /opt/ros/humble/setup.bash && source /opt/ros2_ws/install/setup.bash && \
+   ros2 node list'
+```
+
+兼容旧版宿主机算法时，才启动 TCP 桥。统一容器主流程不执行以下桥接命令:
+
+```bash
+sudo -n docker cp scripts/camera_tcp_bridge.py basler_camera:/tmp/camera_tcp_bridge.py
+sudo -n docker exec -it basler_camera bash -lc \
+  'source /opt/ros/humble/setup.bash && source /opt/ros2_ws/install/setup.bash && \
+   python3 /tmp/camera_tcp_bridge.py forward --host 127.0.0.1'
+```
+
+统一容器主流程的判据是容器内 `/detections`、`/apriltag/pose` 和 `/wechat_qr_node/decoded_info` 可用。
 
 ## 4. 公共可视化入口
 
@@ -89,7 +115,7 @@ ping -c 5 <相机IP>
 ## 6. 公共快速判定规则
 
 - 相机正常: /my_camera/pylon_ros2_camera_node 存在
-- 图像链路正常: /my_camera/pylon_ros2_camera_node/image_raw 的 Publisher count 至少为 1
+- 图像链路正常: 容器内 `/my_camera/pylon_ros2_camera_node/image_raw` 能实际收到消息
 
 二维码与 AprilTag 的业务判定标准，请分别参考:
 
@@ -100,16 +126,18 @@ ping -c 5 <相机IP>
 
 ```bash
 ros2 node list
-ros2 topic info -v /my_camera/pylon_ros2_camera_node/image_raw
-ros2 topic hz /my_camera/pylon_ros2_camera_node/image_raw
+sudo -n docker exec basler_camera bash -lc \
+  'source /opt/ros/humble/setup.bash && source /opt/ros2_ws/install/setup.bash && \
+   ros2 topic hz /my_camera/pylon_ros2_camera_node/image_raw'
 ```
 
-`ros2 topic hz` 显示该订阅进程收到图像的速率，不等同于驱动发布计数。全分辨率图像较大，订阅端可能受 DDS、反序列化和主机调度影响。相机发布 FPS 以驱动日志中的 `Image publish FPS` 或 `/diagnostics` 的 `image_publish_rate` 为准；当前硬件实测约 14-15 FPS。
+`ros2 topic hz` 显示容器内算法订阅端实际收到的速率；驱动发布计数以容器日志中的 `Image publish FPS` 为准。TCP 桥只用于旧版宿主机调试。
 
 ## 8. 公共停止流程
 
 ```bash
-pkill -f "pylon_ros2_camera_node|pylon_ros2_camera.launch.py" || true
+pkill -f "camera_tcp_bridge.py host" || true
+sudo -n docker stop basler_camera
 ```
 
 业务节点停止请分别参考:

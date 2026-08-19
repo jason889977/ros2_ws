@@ -1,6 +1,6 @@
 services:
   basler_camera:
-    image: ${BASLER_IMAGE:-basler_camera_20260818_v1.0}
+    image: ${BASLER_IMAGE:-basler_camera_20260819_v2.0}
     container_name: ${BASLER_CONTAINER_NAME:-basler_camera}
     network_mode: host
     restart: unless-stopped
@@ -12,6 +12,10 @@ services:
       CAMERA_MTU_SIZE: ${CAMERA_MTU_SIZE:-1500}
       CAMERA_STARTUP_USER_SET: ${CAMERA_STARTUP_USER_SET:-Default}
       CAMERA_RESPAWN: ${CAMERA_RESPAWN:-true}
+      SCANNER_IP: ${SCANNER_IP:-172.31.0.91}
+      SCANNER_PORT: ${SCANNER_PORT:-9004}
+      RECONNECT_INTERVAL_S: ${RECONNECT_INTERVAL_S:-5.0}
+    command: ["ros2", "launch", "industrial_vision_bringup", "vision_pipeline.launch.py"]
     devices: []
     volumes:
       - ./config:/opt/ros2_ws/deploy/basler_camera/config:ro
