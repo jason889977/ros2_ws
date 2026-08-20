@@ -118,25 +118,7 @@ def launch_pipeline(context):
     ))
 
     # ------------------------------------------------------------------
-    # Compressed image republish (for QR node compressed subscription)
-    # ------------------------------------------------------------------
-    nodes.append(Node(
-        package='image_transport',
-        executable='republish',
-        name='image_republish_compressed',
-        namespace=camera_id,
-        output='screen',
-        respawn=True,
-        respawn_delay=3.0,
-        arguments=['raw', 'compressed'],
-        remappings=[
-            ('in', image_topic),
-            ('out/compressed', image_topic + '/compressed'),
-        ],
-    ))
-
-    # ------------------------------------------------------------------
-    # QR detection chain (conditional)
+    # QR detection chain (conditional) — subscribes to raw image directly
     # ------------------------------------------------------------------
     nodes.append(Node(
         package='qrcode_detector',
@@ -154,7 +136,7 @@ def launch_pipeline(context):
             'use_camera_info': True,
             'deduplicate_window_s': 0.5,
             'min_detect_interval_s': 0.2,
-            'use_compressed': True,
+            'use_compressed': False,
         }],
         remappings=[
             ('~/decoded_info', qr_decoded_topic),

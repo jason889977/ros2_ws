@@ -1672,6 +1672,7 @@ protected:
   // topics
   rclcpp::Publisher<pylon_ros2_camera_interfaces::msg::CurrentParams>::SharedPtr current_params_pub_;
   pylon_ros2_camera_interfaces::msg::CurrentParams current_params_;
+  double last_params_publish_time_{0.0};
   rclcpp::Publisher<pylon_ros2_camera_interfaces::msg::ComponentStatus>::SharedPtr component_status_pub_;
   pylon_ros2_camera_interfaces::msg::ComponentStatus cm_status_;
   // image transport publishers

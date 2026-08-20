@@ -67,6 +67,7 @@ from rclpy.executors import ExternalShutdownException
 # 与 KeyboardInterrupt（Ctrl+C）类似，但覆盖更多优雅退出的场景。
 
 from rclpy.node import Node
+from rclpy.qos import QoSProfile, ReliabilityPolicy, HistoryPolicy
 # Node 是 ROS 2 节点的基类。
 # 节点是 ROS 2 中的最小计算单元，拥有自己的参数、话题、服务等。
 
@@ -240,15 +241,19 @@ class WeChatQRNode(Node):
         # ==================================================================
         # 创建订阅者（Subscriber）
         # ==================================================================
-        # create_subscription(消息类型, 话题名, 回调函数, 队列大小)
-        # 每当相机发布新图像时，回调函数会被自动调用
+        # 图像话题使用 BEST_EFFORT + KEEP_LAST(1)：丢弃旧帧而非阻塞相机
+        sensor_qos = QoSProfile(
+            reliability=ReliabilityPolicy.BEST_EFFORT,
+            history=HistoryPolicy.KEEP_LAST,
+            depth=1,
+        )
         if self._use_compressed:
             compressed_topic = image_topic + '/compressed'
             self.subscription = self.create_subscription(
                 CompressedImage,
                 compressed_topic,
                 self.compressed_image_callback,
-                queue_size,
+                sensor_qos,
             )
             self.get_logger().info(
                 f'已启用压缩图像订阅: {compressed_topic}'
@@ -258,7 +263,7 @@ class WeChatQRNode(Node):
                 Image,
                 image_topic,
                 self.image_callback,
-                queue_size,
+                sensor_qos,
             )
 
         # ==================================================================

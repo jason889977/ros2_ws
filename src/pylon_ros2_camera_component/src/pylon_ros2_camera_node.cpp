@@ -1189,9 +1189,15 @@ void PylonROS2CameraNode::spin()
 
       if (this->pylon_camera_parameter_set_.enable_current_params_publisher_)
       {
-        if (!rclcpp::ok())
-          break;
-        this->publishCurrentParams();
+        // 节流：最多 1Hz 发布当前参数，避免每帧 30+ 次 GenICam 网络读取
+        double now = rclcpp::Clock().now().seconds();
+        if (now - this->last_params_publish_time_ >= 1.0)
+        {
+          if (!rclcpp::ok())
+            break;
+          this->publishCurrentParams();
+          this->last_params_publish_time_ = now;
+        }
       }
 
       // compute real frame rate, taking into account grabbing and other processes
