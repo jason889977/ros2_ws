@@ -8,10 +8,15 @@
 - **模块化检测链**：AprilTag / QR / Keyence 可独立启用/禁用（`enable_apriltag` / `enable_qrcode` / `enable_keyence`）
 - **多相机支持**：同一容器内运行两条独立 pipeline，每台相机可配不同检测链路，输出话题按 `camera_id` 命名空间隔离
 - **零拷贝图像传输**：C++ 节点（camera + apriltag_ros）运行在 `ComposableNodeContainer` 中，启用 intra-process 零拷贝
-- **压缩图像优化**：Python 节点通过 `image_transport` compressed 流消费图像，降低 DDS 带宽
-- **自动重连**：Keyence TCP 连接带定时重连 + 线程安全保护
-- **节点自动恢复**：所有节点配置 `respawn=True`，崩溃后自动重启
+- **BEST_EFFORT QoS**：图像发布/订阅均使用 `BEST_EFFORT + depth=1`，丢弃旧帧而非阻塞采集循环
+- **GenICam 读取节流**：`publishCurrentParams` 从每帧 30+ 次网络读取降至 1Hz；chunk mode 寄存器每帧 2 次读取改为 init 缓存
+- **12-bit 零分配**：bit-shift 转换缓冲区复用为成员变量，消除每帧 ~10MB 堆分配
+- **编码缓存**：`currentROSEncoding` init 时计算一次，服务回调时更新，消除每帧 GenICam 字符串读取
+- **自动重连**：Keyence TCP 连接带定时重连 + `SO_KEEPALIVE` + `RLock` 线程安全保护
+- **节点自动恢复**：所有节点配置 `respawn=True` + `respawn_delay=3.0`，崩溃后自动重启且防风暴
 - **诊断集成**：Keyence / AprilTag 节点通过 `diagnostic_updater` 上报状态
+- **资源限制**：Docker 容器配置 `mem_limit`/`cpus` + 日志轮转（`json-file 50m × 3`）
+- **78 处空指针保护**：C++ 相机节点所有服务回调、detached action 线程均添加 null guard，防止相机重连期间段错误
 
 ## 目录结构
 
@@ -40,31 +45,28 @@ scripts/                            # 部署、标定、RViz 脚本
 ```mermaid
 graph TB
     subgraph Docker Container ["Docker Container (basler_camera)"]
-        subgraph ComponentContainer ["vision_container (C++ 零拷贝)"]
+        subgraph ComponentContainer ["vision_container (C++ 零拷贝, BEST_EFFORT QoS)"]
             CAM["pylon_ros2_camera_node<br/>(Basler GigE 驱动)"]
+            AT["apriltag_ros<br/>(AprilTag 检测)"]
         end
 
         subgraph DetectionChain ["检测链路 (按 enable_* 开关)"]
-            AT["apriltag_ros<br/>(AprilTag 检测)"]
             ATR["apriltag_pose_reader<br/>(位姿解算)"]
-            QR["wechat_qr_node<br/>(二维码识别)"]
-            KEY["keyence_sr_node<br/>(Keyence 扫码)"]
+            QR["wechat_qr_node<br/>(二维码识别, BEST_EFFORT)"]
+            KEY["keyence_sr_node<br/>(Keyence 扫码, SO_KEEPALIVE)"]
         end
-
-        REP["image_transport republish<br/>(raw → compressed)"]
     end
 
     CAM -- "/{cam}/image_raw<br/>(零拷贝 intra-process)" --> AT
+    CAM -- "/{cam}/image_raw<br/>(BEST_EFFORT, depth=1)" --> QR
     CAM -- "/{cam}/camera_info" --> AT
-    CAM -- "/{cam}/image_raw" --> REP
-    REP -- "/{cam}/image_raw/compressed" --> QR
     CAM -- "/{cam}/camera_info" --> QR
 
     AT -- "/{cam}/detections" --> ATR
     AT -- "/tf (tag frames)" --> ATR
 
     CAM ==>|"GigE TCP/IP"| CAMERA["Basler 相机<br/>(acA2500-14GC)"]
-    KEY ==>|"TCP 9004"| SCANNER["Keyence SR 扫码器"]
+    KEY ==>|"TCP 9004<br/>SO_KEEPALIVE + RLock"| SCANNER["Keyence SR 扫码器"]
 
     subgraph OutputTopics ["输出话题 (按 camera_id 隔离)"]
         T1["/{cam}/apriltag/pose"]
@@ -77,6 +79,14 @@ graph TB
     ATR --> T2
     QR --> T3
     KEY --> T4
+
+    subgraph Diagnostics ["诊断 /diagnostics"]
+        D1["Scanner Connection<br/>(Keyence 状态 + 计数)"]
+        D2["AprilTag Status<br/>(检测计数 + 标签帧)"]
+    end
+
+    KEY --> D1
+    ATR --> D2
 ```
 
 ### 多相机拓扑

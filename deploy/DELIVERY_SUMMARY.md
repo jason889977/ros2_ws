@@ -126,6 +126,29 @@ docker exec keyence_sr_wrapper /opt/ros2_ws/deploy/keyence_sr_wrapper/smoke_test
 - 扫码器 IP / 端口
 - 分辨率、MTU、采样率等模块相关参数
 
+### 统一容器新增参数（多相机 + 模块化）
+
+| 参数 | 默认值 | 说明 |
+|------|--------|------|
+| `ENABLE_APRILTAG` | `true` | 启用 AprilTag 检测链 |
+| `ENABLE_QRCODE` | `true` | 启用二维码检测链 |
+| `ENABLE_KEYENCE` | `true` | 启用 Keyence 扫码节点 |
+| `CAMERA_ID_2` | _(空)_ | 第二台相机 ID，非空时启动双 pipeline |
+| `CAMERA_CONFIG_2` | _(同 cam1)_ | 第二台相机配置文件路径 |
+| `ENABLE_APRILTAG_2` | `true` | 第二台相机 AprilTag 开关 |
+| `ENABLE_QRCODE_2` | `true` | 第二台相机 QR 开关 |
+| `ENABLE_KEYENCE_2` | `true` | 第二台相机 Keyence 开关 |
+
+### 资源限制参数
+
+| 参数 | 默认值 | 说明 |
+|------|--------|------|
+| `MEM_LIMIT` | `4g` | 容器内存上限 |
+| `MEM_SWAP_LIMIT` | `4g` | 容器 swap 上限 |
+| `CPUS_LIMIT` | `4.0` | 容器 CPU 核数上限 |
+| `LOG_MAX_SIZE` | `50m` | 单个日志文件最大大小 |
+| `LOG_MAX_FILE` | `3` | 日志文件轮转数量 |
+
 ## 6. 硬件挂载要求
 
 ### Basler
@@ -202,6 +225,23 @@ docker exec keyence_sr_wrapper /opt/ros2_ws/deploy/keyence_sr_wrapper/smoke_test
 
 - `/{camera_id}/scanner/trigger` `std_srvs/srv/Trigger`
 
+## 7.5 QoS 与诊断
+
+### QoS 配置
+
+| 话题 | 可靠性 | 深度 | 说明 |
+|------|--------|------|------|
+| `image_raw`（发布 + 订阅） | BEST_EFFORT | 1 | 丢弃旧帧，防止反压阻塞采集 |
+| `camera_info` | RELIABLE | 10 | 内参数据量小，保证可达 |
+| 检测结果 / 位姿 | RELIABLE | 10 | 关键数据，保证可达 |
+
+### 诊断话题 `/diagnostics`
+
+| 诊断名 | 来源 | 内容 |
+|--------|------|------|
+| `Scanner Connection` | Keyence 节点 | 连接状态、扫码器 IP/端口、累计扫码/错误计数 |
+| `AprilTag Status` | AprilTag 节点 | 检测状态、累计检测/发布计数、当前跟踪的标签帧 |
+
 ## 8. 更新日志摘要
 
 ### Basler
@@ -227,6 +267,41 @@ docker exec keyence_sr_wrapper /opt/ros2_ws/deploy/keyence_sr_wrapper/smoke_test
 - 增加 TCP/IP 扫码器包装层
 - 增加超时重连逻辑
 - 补齐 ROS 2 接口说明与 smoke test
+
+### v2.0 稳定性与性能优化（2026-08-20）
+
+**可靠性：**
+- C++ 相机节点 78 处空指针保护（服务回调 + detached action 线程），防止相机重连期间段错误
+- Python 节点改用 `MultiThreadedExecutor` + `CallbackGroup`，防止阻塞回调卡死定时器
+- Keyence TCP 添加 `SO_KEEPALIVE` + `RLock` 线程安全保护
+- AprilTag `TransformListener` 改为 `spin_thread=False`，消除双线程竞争
+- 所有 respawn 节点添加 `respawn_delay=3.0`，防止崩溃风暴
+- Docker entrypoint 双相机信号转发 + 退出码传播
+- `calcCurrentBrightness` 整数溢出修复（`0` → `0LL`）
+- `catch(...)` 块添加 `RCLCPP_ERROR` 日志（3 处）
+
+**性能：**
+- 图像发布/订阅均改为 `BEST_EFFORT QoS depth=1`，防止反压阻塞采集
+- `publishCurrentParams` 从每帧调用节流至 1Hz（GigE 负载降 87.5%）
+- Chunk mode GenICam 寄存器每帧 2 次读取改为 init 缓存（每帧省 0.2-2ms）
+- 12-bit bit-shift 缓冲区复用为成员变量（消除每帧 ~10MB 堆分配）
+- `currentROSEncoding` init 缓存（消除每帧 GenICam 字符串读取）
+- QR 节点去除 Mono8→BGR 颜色转换（内存带宽降 66%）
+- QR OpenCV 后端改为单码优先策略
+- AprilTag `_candidate_frames` 缓存 + dirty flag（90%+ TF 回调直接返回缓存）
+- 去除 `image_transport republish` 中转节点（省 1 个进程 + 1-5ms 延迟）
+
+**多相机：**
+- Launch 文件添加 `enable_apriltag`/`enable_qrcode`/`enable_keyence` 条件开关
+- 所有输出话题命名空间化为 `/{camera_id}/...`
+- Docker 支持 `CAMERA_ID_2` 双相机部署
+- Keyence 绝对话题改为相对路径 `~/barcode`、`~/trigger`
+
+**运维：**
+- 所有 Docker 容器添加 `mem_limit`/`cpus` + 日志轮转
+- Healthcheck 增加检测模块节点存活检查
+- 新增故障排查手册、架构数据流图
+- 17 个单元测试覆盖核心逻辑
 
 ## 9. 交付结论
 
