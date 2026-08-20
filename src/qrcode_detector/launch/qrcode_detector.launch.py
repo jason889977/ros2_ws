@@ -49,19 +49,22 @@ def generate_launch_description():
     # ---------- 可配置参数 ----------
     image_topic_arg = DeclareLaunchArgument(
         'image_topic',
-        default_value='/my_camera/pylon_ros2_camera_node/image_raw',
+        default_value=os.environ.get(
+            'IMAGE_TOPIC',
+            '/my_camera/pylon_ros2_camera_node/image_raw',
+        ),
         description='Basler 相机发布的图像话题名称',
     )
 
     model_dir_arg = DeclareLaunchArgument(
         'model_dir',
-        default_value='',
+        default_value=os.environ.get('MODEL_DIR', ''),
         description='WeChatQR 模型文件目录（留空使用包内默认路径）',
     )
 
     prefer_wechat_qr_arg = DeclareLaunchArgument(
         'prefer_wechat_qr',
-        default_value='true',
+        default_value=os.environ.get('PREFER_WECHAT_QR', 'true'),
         description='是否优先使用 WeChatQR 模型（对模糊/小尺寸/遮挡 QR 码更鲁棒）',
     )
 

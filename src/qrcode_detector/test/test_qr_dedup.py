@@ -3,8 +3,7 @@
 import time
 import unittest
 
-import rclpy
-from rclpy.node import Node
+import numpy as np
 
 from qrcode_detector.qrcode_node import WeChatQRNode
 
@@ -45,6 +44,23 @@ class TestQRDeduplication(unittest.TestCase):
         node._should_publish('ABC123')
         time.sleep(0.15)
         self.assertTrue(node._should_publish('ABC123'))
+
+
+class TestQRCorners(unittest.TestCase):
+
+    def test_normalizes_single_code_corner_dimension(self):
+        points = np.zeros((1, 4, 2), dtype=np.float32)
+        corners = WeChatQRNode._normalize_corners(points)
+        self.assertEqual(corners.shape, (4, 2))
+        self.assertEqual(corners.dtype, np.float64)
+
+    def test_rejects_invalid_or_non_finite_corners(self):
+        self.assertIsNone(WeChatQRNode._normalize_corners(np.zeros((3, 2))))
+        self.assertIsNone(
+            WeChatQRNode._normalize_corners(
+                np.array([[0.0, 0.0], [np.nan, 0.0], [0.0, 0.0], [0.0, 0.0]])
+            )
+        )
 
 
 if __name__ == '__main__':

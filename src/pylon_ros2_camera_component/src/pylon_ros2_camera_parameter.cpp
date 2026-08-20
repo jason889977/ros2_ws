@@ -27,6 +27,9 @@
  *****************************************************************************/
 
 #include "pylon_ros2_camera_parameter.hpp"
+
+#include <cmath>
+
 #include <sensor_msgs/image_encodings.hpp>
 
 
@@ -179,7 +182,7 @@ void PylonROS2CameraParameter::readFromRosParameterServer(rclcpp::Node& nh)
         RCLCPP_WARN_STREAM(LOGGER, "Specified binning_x factor not in valid "
             << "range! Binning x = " << binning_x << ". Will reset it to "
             << "default value (1)");
-        binning_x_ = 1;
+        binning_x = 1;
         this->binning_x_given_ = false;
     }
 
@@ -204,9 +207,9 @@ void PylonROS2CameraParameter::readFromRosParameterServer(rclcpp::Node& nh)
     if (binning_y > 32 || binning_y < 0)
     {
         RCLCPP_WARN_STREAM(LOGGER, "Specified binning_y factor not in valid "
-            << "range! Binning x = " << binning_y << ". Will reset it to "
+            << "range! Binning y = " << binning_y << ". Will reset it to "
             << "default value (1)");
-        binning_y_ = 1;
+        binning_y = 1;
         this->binning_y_given_ = false;
     }
 
@@ -591,7 +594,8 @@ void PylonROS2CameraParameter::validateParameterSet(rclcpp::Node& nh)
         RCLCPP_INFO_STREAM(LOGGER, "No Device User ID set -> Will connect the first available camera device");
     }
 
-    if (this->frame_rate_ < 0 && this->frame_rate_ != -1)
+    if (this->frame_rate_ != -1 &&
+        (!std::isfinite(this->frame_rate_) || this->frame_rate_ <= 0.0))
     {
         RCLCPP_WARN_STREAM(LOGGER, "The specified frame rate value - " << this->frame_rate_ << " Hz - is not valid!"
                                 << "-> Will reset it to default value (5 Hz).");

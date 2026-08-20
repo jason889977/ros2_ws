@@ -22,6 +22,7 @@ services:
       ENABLE_KEYENCE: ${ENABLE_KEYENCE:-true}
       # Camera 2 (leave CAMERA_ID_2 empty to disable dual-camera)
       CAMERA_ID_2: ${CAMERA_ID_2:-}
+      # Required and must identify a different physical camera when CAMERA_ID_2 is set.
       CAMERA_CONFIG_2: ${CAMERA_CONFIG_2:-}
       CAMERA_STARTUP_USER_SET_2: ${CAMERA_STARTUP_USER_SET_2:-Default}
       SCANNER_IP_2: ${SCANNER_IP_2:-}

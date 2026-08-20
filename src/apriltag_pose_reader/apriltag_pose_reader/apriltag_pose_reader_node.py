@@ -288,6 +288,29 @@ class AprilTagPoseReader(Node):
             return f'{family}:{detection_id}'
         return ''
 
+    def _is_auto_tag_frame(self, frame_id: str) -> bool:
+        """Return whether a TF child frame can be discovered as an AprilTag."""
+        family, separator, raw_id = frame_id.partition(':')
+        if not separator or not raw_id.isdigit():
+            return False
+        family = self._normalize_tag_family(family)
+        if not family.startswith('tag'):
+            return False
+        tag_id = int(raw_id)
+        return (
+            (not self._tag_family or family == self._tag_family)
+            and (self._tag_id < 0 or tag_id == self._tag_id)
+        )
+
+    def _remember_tag_frame(self, frame_id: str) -> None:
+        """Record a detected or TF-discovered tag frame as currently active."""
+        is_new = frame_id not in self._known_tag_frames
+        self._known_tag_frames.add(frame_id)
+        self._tag_last_seen[frame_id] = time.monotonic()
+        if is_new or self._latest_frame_hint != frame_id:
+            self._candidate_cache_dirty = True
+        self._latest_frame_hint = frame_id
+
     def _candidate_frames(self) -> Set[str]:
         """
         确定当前要跟踪的标签坐标系集合。
@@ -305,19 +328,22 @@ class AprilTagPoseReader(Node):
             return {self._tag_frame_id}
         if self._tag_family and self._tag_id >= 0:
             return {f'{self._tag_family}:{self._tag_id}'}
-        if not self._candidate_cache_dirty and self._candidate_cache is not None:
-            return self._candidate_cache
         if self._tag_timeout_s > 0.0:
             now = time.monotonic()
-            self._known_tag_frames = {
+            active_frames = {
                 frame_id for frame_id in self._known_tag_frames
                 if now - self._tag_last_seen.get(frame_id, 0.0) <= self._tag_timeout_s
             }
+            if active_frames != self._known_tag_frames:
+                self._known_tag_frames = active_frames
+                self._candidate_cache_dirty = True
             # 同步清理 _tag_last_seen 字典，防止无限增长
             self._tag_last_seen = {
                 frame_id: ts for frame_id, ts in self._tag_last_seen.items()
                 if now - ts <= self._tag_timeout_s
             }
+        if not self._candidate_cache_dirty and self._candidate_cache is not None:
+            return self._candidate_cache
         if self._publish_all_tags:
             self._candidate_cache = set(self._known_tag_frames)
             self._candidate_cache_dirty = False
@@ -389,12 +415,7 @@ class AprilTagPoseReader(Node):
             frame_id = self._frame_from_detection(detection)
             if not frame_id:
                 continue
-            # 记录到已知集合中
-            self._known_tag_frames.add(frame_id)
-            self._tag_last_seen[frame_id] = time.monotonic()
-            # 更新最新提示
-            self._latest_frame_hint = frame_id
-            self._candidate_cache_dirty = True
+            self._remember_tag_frame(frame_id)
             if self._publish_detection_logs:
                 # 打印检测详情：
                 # - family:         标签族（如 tag36h11）
@@ -421,6 +442,11 @@ class AprilTagPoseReader(Node):
         参数:
             msg: TFMessage，包含多个 TransformStamped 的集合
         """
+        if not self._tag_frame_id:
+            for transform in msg.transforms:
+                if self._is_auto_tag_frame(transform.child_frame_id):
+                    self._remember_tag_frame(transform.child_frame_id)
+
         candidate_frames = self._candidate_frames()
         if not candidate_frames:
             return

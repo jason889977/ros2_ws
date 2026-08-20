@@ -48,6 +48,7 @@ class KeyenceSRNode(Node):
 
         # 初始化 TCP 套接字变量为 None，表示尚未建立连接；后续 connect_to_scanner() 会为其赋值
         self.client_socket = None
+        self._receive_buffer = b''
         # 保护 socket 操作的互斥锁（RLock 允许同一线程重入，因为 trigger 回调内部会调用 connect）
         self._socket_lock = threading.RLock()
         # 立即调用连接方法，尝试与扫码器建立 TCP 连接；如果失败，client_socket 仍为 None，后续触发时会报错
@@ -89,57 +90,94 @@ class KeyenceSRNode(Node):
         )
 
     # 定义连接到扫码器的方法，负责建立 TCP 套接字连接
-    def connect_to_scanner(self) -> None:
+    def connect_to_scanner(
+        self,
+        scanner_ip: str | None = None,
+        scanner_port: int | None = None,
+    ) -> bool:
         """Establishes the TCP connection to scanner."""
+        target_ip = scanner_ip if scanner_ip is not None else self.scanner_ip
+        target_port = (
+            scanner_port if scanner_port is not None else self.scanner_port
+        )
         with self._socket_lock:
+            candidate_socket = None
             try:
-                # 检查是否已有旧的套接字连接存在（例如重连场景）
-                if self.client_socket:
-                    # 如果存在旧连接，先关闭它，释放系统资源，避免文件描述符泄漏
-                    self.client_socket.close()
-
                 # 创建一个新的 TCP 套接字：
                 #   socket.AF_INET 表示使用 IPv4 地址族
                 #   socket.SOCK_STREAM 表示使用 TCP 协议（面向连接、可靠传输）
-                self.client_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-                self.client_socket.setsockopt(socket.SOL_SOCKET, socket.SO_KEEPALIVE, 1)
+                candidate_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+                candidate_socket.setsockopt(
+                    socket.SOL_SOCKET,
+                    socket.SO_KEEPALIVE,
+                    1,
+                )
 
                 # 设置套接字的超时时间为 3.0 秒
                 # 后续所有阻塞操作（如 connect、recv）如果在 3 秒内未完成，将抛出 socket.timeout 异常
                 # 这可以防止节点在扫码器无响应时无限阻塞
-                self.client_socket.settimeout(3.0)
+                candidate_socket.settimeout(3.0)
 
                 # 发起 TCP 连接请求，目标地址为 (scanner_ip, scanner_port)
                 # 如果连接成功，套接字进入已连接状态；如果失败（如网络不通、端口未开放），将抛出异常
-                self.client_socket.connect((self.scanner_ip, self.scanner_port))
+                candidate_socket.connect((target_ip, target_port))
+                previous_socket = self.client_socket
+                self.client_socket = candidate_socket
+                self._receive_buffer = b''
+                if previous_socket:
+                    previous_socket.close()
                 self.get_logger().info('Successfully connected to Keyence SR-1000.')
+                return True
 
             except Exception as e:
                 # 捕获所有异常（包括网络不可达、连接被拒绝、超时等），记录错误日志
                 # 使用通用 Exception 而非具体异常类型，是为了在连接阶段尽可能容错
                 self.get_logger().error(f'Failed to connect to scanner: {e}')
-                # 连接失败时将套接字变量重置为 None，标记当前为"未连接"状态
-                # 后续 trigger_scan_callback 会检查此变量，若为 None 则直接返回失败
-                self.client_socket = None
+                if candidate_socket:
+                    candidate_socket.close()
+                return False
+
+    def _disconnect_scanner(self) -> None:
+        """Closes the current scanner connection and discards partial data."""
+        if self.client_socket:
+            try:
+                self.client_socket.close()
+            except OSError:
+                pass
+        self.client_socket = None
+        self._receive_buffer = b''
+
+    def _receive_response(self) -> str:
+        """Reads exactly one CR-terminated scanner response from the TCP stream."""
+        while b'\r' not in self._receive_buffer:
+            chunk = self.client_socket.recv(1024)
+            if not chunk:
+                raise ConnectionError('Scanner closed the connection')
+            self._receive_buffer += chunk
+
+        raw_response, self._receive_buffer = self._receive_buffer.split(b'\r', 1)
+        return raw_response.decode('ascii').strip()
 
     def _on_parameter_changed(self, params: list[Parameter]) -> SetParametersResult:
         """参数变更回调：检测 scanner_ip / scanner_port 变化后自动重连。"""
-        need_reconnect = False
+        next_ip = self.scanner_ip
+        next_port = self.scanner_port
         for param in params:
-            if param.name == 'scanner_ip' and param.value != self.scanner_ip:
-                self.scanner_ip = param.value
-                need_reconnect = True
-                self.get_logger().info(f'参数 scanner_ip 已更新为: {self.scanner_ip}')
-            elif param.name == 'scanner_port' and param.value != self.scanner_port:
-                self.scanner_port = param.value
-                need_reconnect = True
-                self.get_logger().info(f'参数 scanner_port 已更新为: {self.scanner_port}')
+            if param.name == 'scanner_ip':
+                next_ip = param.value
+            elif param.name == 'scanner_port':
+                next_port = param.value
 
-        if need_reconnect:
+        if next_ip != self.scanner_ip or next_port != self.scanner_port:
             self.get_logger().info('正在重新连接扫码器...')
-            self.connect_to_scanner()
-            if self.client_socket is None:
+            if not self.connect_to_scanner(next_ip, next_port):
                 return SetParametersResult(successful=False, reason='Reconnection failed')
+            self.scanner_ip = next_ip
+            self.scanner_port = next_port
+            self.get_logger().info(
+                f'参数 scanner_ip/scanner_port 已更新为: '
+                f'{self.scanner_ip}:{self.scanner_port}'
+            )
 
         return SetParametersResult(successful=True)
 
@@ -193,11 +231,9 @@ class KeyenceSRNode(Node):
                 # sendall 会确保所有字节都被发送出去（与 send 不同，send 可能只发送部分数据）
                 self.client_socket.sendall(command)
 
-                # 从扫码器接收返回数据，最多接收 1024 字节
-                # recv 是阻塞调用，但由于之前设置了 3 秒超时，超过 3 秒未收到数据会抛出 socket.timeout
-                # 收到的字节数据通过 .decode('ascii') 转换为 ASCII 字符串
-                # .strip() 去除首尾的空白字符（包括 \r\n 等换行符），得到纯净的扫码结果
-                data = self.client_socket.recv(1024).decode('ascii').strip()
+                # TCP 是字节流协议，必须读取到 Keyence 规定的 CR 终止符，
+                # 以正确处理响应分包和粘包。
+                data = self._receive_response()
 
                 # ---- 解析扫码器响应 ----
 
@@ -224,8 +260,7 @@ class KeyenceSRNode(Node):
                 # 可能原因：扫码器忙、网络延迟过高、扫码器故障等
                 response.success = False
                 response.message = 'Timeout: Scanner did not respond in time.'
-                self.client_socket.close()
-                self.client_socket = None
+                self._disconnect_scanner()
 
             except Exception as e:
                 # 捕获所有其他异常（如连接断开、数据解码错误等）
@@ -235,6 +270,7 @@ class KeyenceSRNode(Node):
                 self.get_logger().warn('Connection lost. Attempting to reconnect...')
                 # 尝试自动重新连接扫码器，以便后续的服务调用可以继续使用
                 # 这是一种简单的容错机制：在通信异常时自动恢复连接，而非要求用户手动重启节点
+                self._disconnect_scanner()
                 self.connect_to_scanner()
 
         return response
@@ -242,8 +278,7 @@ class KeyenceSRNode(Node):
     # 重写父类的 destroy_node 方法，在节点销毁时执行自定义的清理逻辑
     def destroy_node(self) -> None:
         """Closes TCP connection on node shutdown."""
-        if self.client_socket:
-            self.client_socket.close()
+        self._disconnect_scanner()
         super().destroy_node()
 
 

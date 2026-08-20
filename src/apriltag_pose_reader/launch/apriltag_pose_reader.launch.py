@@ -79,12 +79,18 @@ def generate_launch_description():
     return LaunchDescription([
         DeclareLaunchArgument(
             'image_topic',
-            default_value='/my_camera/pylon_ros2_camera_node/image_raw',
+            default_value=os.environ.get(
+                'IMAGE_TOPIC',
+                '/my_camera/pylon_ros2_camera_node/image_raw',
+            ),
             description='Basler 相机的图像话题。',
         ),
         DeclareLaunchArgument(
             'camera_info_topic',
-            default_value='/my_camera/pylon_ros2_camera_node/camera_info',
+            default_value=os.environ.get(
+                'CAMERA_INFO_TOPIC',
+                '/my_camera/pylon_ros2_camera_node/camera_info',
+            ),
             description='Basler 相机的 camera_info 话题。',
         ),
         DeclareLaunchArgument(
@@ -94,7 +100,7 @@ def generate_launch_description():
         ),
         DeclareLaunchArgument(
             'start_detector',
-            default_value='true',
+            default_value=os.environ.get('START_DETECTOR', 'true'),
             description='是否同时启动官方 apriltag_ros 检测节点。',
         ),
         DeclareLaunchArgument(
@@ -104,22 +110,22 @@ def generate_launch_description():
         ),
         DeclareLaunchArgument(
             'tag_family',
-            default_value='36h11',
+            default_value=os.environ.get('TAG_FAMILY', '36h11'),
             description='当 tag_frame_id 未指定时，用于拼接默认 frame 的 family。',
         ),
         DeclareLaunchArgument(
             'tag_id',
-            default_value='-1',
+            default_value=os.environ.get('TAG_ID', '-1'),
             description='当 tag_frame_id 未指定时，用于拼接默认 frame 的 id。',
         ),
         DeclareLaunchArgument(
             'lookup_parent_frame',
-            default_value='',
+            default_value=os.environ.get('LOOKUP_PARENT_FRAME', ''),
             description='可选: TF lookup 的父坐标系；为空时自动使用最近一次 TF 消息的父坐标系。',
         ),
         DeclareLaunchArgument(
             'lookup_rate_hz',
-            default_value='0.0',
+            default_value=os.environ.get('LOOKUP_RATE_HZ', '0.0'),
             description='大于 0 时启用 TF buffer 周期性回查发布。',
         ),
         DeclareLaunchArgument(

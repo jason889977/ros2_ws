@@ -165,6 +165,8 @@ const std::string& PylonROS2CameraNode::cameraFrame() const
 
 bool PylonROS2CameraNode::init()
 {
+  std::lock_guard<std::recursive_mutex> lock(this->grab_mutex_);
+
   // reading all necessary parameter to open the desired camera from the
   // ros-parameter-server. In case that invalid parameter values can be
   // detected, the interface will reset them to the default values.
@@ -265,355 +267,355 @@ void PylonROS2CameraNode::initServices()
   std::string srv_prefix = "~/";
 
   srv_name = srv_prefix + "get_max_num_buffer";
-  this->get_max_num_buffer_srv_ = this->create_service<GetIntegerSrv>(srv_name, std::bind(&PylonROS2CameraNode::getMaxNumBufferCallback, this, _1, _2));
+  this->get_max_num_buffer_srv_ = this->createCameraService<GetIntegerSrv>(srv_name, std::bind(&PylonROS2CameraNode::getMaxNumBufferCallback, this, _1, _2));
   
   srv_name = srv_prefix + "get_statistic_total_buffer_count";
-  this->get_statistic_total_buffer_count_srv_ = this->create_service<GetIntegerSrv>(srv_name, std::bind(&PylonROS2CameraNode::getStatisticTotalBufferCountCallback, this, _1, _2));
+  this->get_statistic_total_buffer_count_srv_ = this->createCameraService<GetIntegerSrv>(srv_name, std::bind(&PylonROS2CameraNode::getStatisticTotalBufferCountCallback, this, _1, _2));
   
   srv_name = srv_prefix + "get_statistic_failed_buffer_count";
-  this->get_statistic_failed_buffer_count_srv_ = this->create_service<GetIntegerSrv>(srv_name, std::bind(&PylonROS2CameraNode::getStatisticFailedBufferCountCallback, this, _1, _2));
+  this->get_statistic_failed_buffer_count_srv_ = this->createCameraService<GetIntegerSrv>(srv_name, std::bind(&PylonROS2CameraNode::getStatisticFailedBufferCountCallback, this, _1, _2));
   
   srv_name = srv_prefix + "get_statistic_buffer_underrun_count";
-  this->get_statistic_buffer_underrun_count_srv_ = this->create_service<GetIntegerSrv>(srv_name, std::bind(&PylonROS2CameraNode::getStatisticBufferUnderrunCountCallback, this, _1, _2));
+  this->get_statistic_buffer_underrun_count_srv_ = this->createCameraService<GetIntegerSrv>(srv_name, std::bind(&PylonROS2CameraNode::getStatisticBufferUnderrunCountCallback, this, _1, _2));
   
   srv_name = srv_prefix + "get_statistic_failed_packet_count";
-  this->get_statistic_failed_packet_count_srv_ = this->create_service<GetIntegerSrv>(srv_name, std::bind(&PylonROS2CameraNode::getStatisticFailedPacketCountCallback, this, _1, _2));
+  this->get_statistic_failed_packet_count_srv_ = this->createCameraService<GetIntegerSrv>(srv_name, std::bind(&PylonROS2CameraNode::getStatisticFailedPacketCountCallback, this, _1, _2));
   
   srv_name = srv_prefix + "get_statistic_resend_request_count";
-  this->get_statistic_resend_request_count_srv_ = this->create_service<GetIntegerSrv>(srv_name, std::bind(&PylonROS2CameraNode::getStatisticResendRequestCountCallback, this, _1, _2));
+  this->get_statistic_resend_request_count_srv_ = this->createCameraService<GetIntegerSrv>(srv_name, std::bind(&PylonROS2CameraNode::getStatisticResendRequestCountCallback, this, _1, _2));
   
   srv_name = srv_prefix + "get_statistic_missed_frame_count";
-  this->get_statistic_missed_frame_count_srv_ = this->create_service<GetIntegerSrv>(srv_name, std::bind(&PylonROS2CameraNode::getStatisticMissedFrameCountCallback, this, _1, _2));
+  this->get_statistic_missed_frame_count_srv_ = this->createCameraService<GetIntegerSrv>(srv_name, std::bind(&PylonROS2CameraNode::getStatisticMissedFrameCountCallback, this, _1, _2));
   
   srv_name = srv_prefix + "get_statistic_resynchronization_count";
-  this->get_statistic_resynchronization_count_srv_ = this->create_service<GetIntegerSrv>(srv_name, std::bind(&PylonROS2CameraNode::getStatisticResynchronizationCountCallback, this, _1, _2));
+  this->get_statistic_resynchronization_count_srv_ = this->createCameraService<GetIntegerSrv>(srv_name, std::bind(&PylonROS2CameraNode::getStatisticResynchronizationCountCallback, this, _1, _2));
   
   srv_name = srv_prefix + "get_chunk_mode_active";
-  this->get_chunk_mode_active_srv_ = this->create_service<GetIntegerSrv>(srv_name, std::bind(&PylonROS2CameraNode::getChunkModeActiveCallback, this, _1, _2));
+  this->get_chunk_mode_active_srv_ = this->createCameraService<GetIntegerSrv>(srv_name, std::bind(&PylonROS2CameraNode::getChunkModeActiveCallback, this, _1, _2));
   
   srv_name = srv_prefix + "get_chunk_selector";
-  this->get_chunk_selector_srv_ = this->create_service<GetIntegerSrv>(srv_name, std::bind(&PylonROS2CameraNode::getChunkSelectorCallback, this, _1, _2));
+  this->get_chunk_selector_srv_ = this->createCameraService<GetIntegerSrv>(srv_name, std::bind(&PylonROS2CameraNode::getChunkSelectorCallback, this, _1, _2));
   
   srv_name = srv_prefix + "get_chunk_enable";
-  this->get_chunk_enable_srv_ = this->create_service<GetIntegerSrv>(srv_name, std::bind(&PylonROS2CameraNode::getChunkEnableCallback, this, _1, _2));
+  this->get_chunk_enable_srv_ = this->createCameraService<GetIntegerSrv>(srv_name, std::bind(&PylonROS2CameraNode::getChunkEnableCallback, this, _1, _2));
   
   srv_name = srv_prefix + "get_chunk_timestamp";
-  this->get_chunk_timestamp_srv_ = this->create_service<GetIntegerSrv>(srv_name, std::bind(&PylonROS2CameraNode::getChunkTimestampCallback, this, _1, _2));
+  this->get_chunk_timestamp_srv_ = this->createCameraService<GetIntegerSrv>(srv_name, std::bind(&PylonROS2CameraNode::getChunkTimestampCallback, this, _1, _2));
   
   srv_name = srv_prefix + "get_chunk_line_status_all";
-  this->get_chunk_line_status_all_srv_ = this->create_service<GetIntegerSrv>(srv_name, std::bind(&PylonROS2CameraNode::getChunkLineStatusAllCallback, this, _1, _2));
+  this->get_chunk_line_status_all_srv_ = this->createCameraService<GetIntegerSrv>(srv_name, std::bind(&PylonROS2CameraNode::getChunkLineStatusAllCallback, this, _1, _2));
   
   srv_name = srv_prefix + "get_chunk_frame_counter";
-  this->get_chunk_frame_counter_srv_ = this->create_service<GetIntegerSrv>(srv_name, std::bind(&PylonROS2CameraNode::getChunkFramecounterCallback, this, _1, _2));
+  this->get_chunk_frame_counter_srv_ = this->createCameraService<GetIntegerSrv>(srv_name, std::bind(&PylonROS2CameraNode::getChunkFramecounterCallback, this, _1, _2));
   
   srv_name = srv_prefix + "get_chunk_counter_value";
-  this->get_chunk_counter_value_srv_ = this->create_service<GetIntegerSrv>(srv_name, std::bind(&PylonROS2CameraNode::getChunkCounterValueCallback, this, _1, _2));
+  this->get_chunk_counter_value_srv_ = this->createCameraService<GetIntegerSrv>(srv_name, std::bind(&PylonROS2CameraNode::getChunkCounterValueCallback, this, _1, _2));
   
   srv_name = srv_prefix + "get_chunk_exposure_time";
-  this->get_chunk_exposure_time_srv_ = this->create_service<GetFloatSrv>(srv_name, std::bind(&PylonROS2CameraNode::getChunkExposureTimeCallback, this, _1, _2));
+  this->get_chunk_exposure_time_srv_ = this->createCameraService<GetFloatSrv>(srv_name, std::bind(&PylonROS2CameraNode::getChunkExposureTimeCallback, this, _1, _2));
   
   srv_name = srv_prefix + "set_binning";
-  this->set_binning_srv_ = this->create_service<SetBinningSrv>(srv_name, std::bind(&PylonROS2CameraNode::setBinningCallback, this, _1, _2));
+  this->set_binning_srv_ = this->createCameraService<SetBinningSrv>(srv_name, std::bind(&PylonROS2CameraNode::setBinningCallback, this, _1, _2));
   
   srv_name = srv_prefix + "set_brightness";
-  this->set_brightness_srv_ = this->create_service<SetBrightnessSrv>(srv_name, std::bind(&PylonROS2CameraNode::setBrightnessCallback, this, _1, _2));
+  this->set_brightness_srv_ = this->createCameraService<SetBrightnessSrv>(srv_name, std::bind(&PylonROS2CameraNode::setBrightnessCallback, this, _1, _2));
   
   srv_name = srv_prefix + "set_exposure";
-  this->set_exposure_srv_ = this->create_service<SetExposureSrv>(srv_name, std::bind(&PylonROS2CameraNode::setExposureCallback, this, _1, _2));
+  this->set_exposure_srv_ = this->createCameraService<SetExposureSrv>(srv_name, std::bind(&PylonROS2CameraNode::setExposureCallback, this, _1, _2));
   
   srv_name = srv_prefix + "set_gain";
-  this->set_gain_srv_ = this->create_service<SetGainSrv>(srv_name, std::bind(&PylonROS2CameraNode::setGainCallback, this, _1, _2));
+  this->set_gain_srv_ = this->createCameraService<SetGainSrv>(srv_name, std::bind(&PylonROS2CameraNode::setGainCallback, this, _1, _2));
   
   srv_name = srv_prefix + "set_gamma";
-  this->set_gamma_srv_ = this->create_service<SetGammaSrv>(srv_name, std::bind(&PylonROS2CameraNode::setGammaCallback, this, _1, _2));
+  this->set_gamma_srv_ = this->createCameraService<SetGammaSrv>(srv_name, std::bind(&PylonROS2CameraNode::setGammaCallback, this, _1, _2));
   
   srv_name = srv_prefix + "set_roi";
-  this->set_roi_srv_ = this->create_service<SetROISrv>(srv_name, std::bind(&PylonROS2CameraNode::setROICallback, this, _1, _2));
+  this->set_roi_srv_ = this->createCameraService<SetROISrv>(srv_name, std::bind(&PylonROS2CameraNode::setROICallback, this, _1, _2));
   
   srv_name = srv_prefix + "set_sleeping";
-  this->set_sleeping_srv_ = this->create_service<SetSleepingSrv>(srv_name, std::bind(&PylonROS2CameraNode::setSleepingCallback, this, _1, _2));
+  this->set_sleeping_srv_ = this->createCameraService<SetSleepingSrv>(srv_name, std::bind(&PylonROS2CameraNode::setSleepingCallback, this, _1, _2));
   
   srv_name = srv_prefix + "set_white_balance";
-  this->set_white_balance_srv_ = this->create_service<SetWhiteBalanceSrv>(srv_name, std::bind(&PylonROS2CameraNode::setWhiteBalanceCallback, this, _1, _2));
+  this->set_white_balance_srv_ = this->createCameraService<SetWhiteBalanceSrv>(srv_name, std::bind(&PylonROS2CameraNode::setWhiteBalanceCallback, this, _1, _2));
   
   srv_name = srv_prefix + "set_action_trigger_configuration";
-  this->set_ac_trigger_config_srv_ = this->create_service<SetActionTriggerConfiguration>(srv_name, std::bind(&PylonROS2CameraNode::setActionTriggerConfigurationCallback, this, _1, _2));
+  this->set_ac_trigger_config_srv_ = this->createCameraService<SetActionTriggerConfiguration>(srv_name, std::bind(&PylonROS2CameraNode::setActionTriggerConfigurationCallback, this, _1, _2));
 
   srv_name = srv_prefix + "issue_action_command";
-  this->issue_action_command_srv_ = this->create_service<IssueActionCommand>(srv_name, std::bind(&PylonROS2CameraNode::issueActionCommandCallback, this, _1, _2));
+  this->issue_action_command_srv_ = this->createCameraService<IssueActionCommand>(srv_name, std::bind(&PylonROS2CameraNode::issueActionCommandCallback, this, _1, _2));
 
   srv_name = srv_prefix + "issue_scheduled_action_command";
-  this->issue_scheduled_action_command_srv_ = this->create_service<IssueScheduledActionCommand>(srv_name, std::bind(&PylonROS2CameraNode::issueScheduledActionCommandCallback, this, _1, _2));
+  this->issue_scheduled_action_command_srv_ = this->createCameraService<IssueScheduledActionCommand>(srv_name, std::bind(&PylonROS2CameraNode::issueScheduledActionCommandCallback, this, _1, _2));
 
   srv_name = srv_prefix + "set_offset_x";
-  this->set_offset_x_srv_ = this->create_service<SetIntegerSrv>(srv_name, std::bind(&PylonROS2CameraNode::setOffsetXCallback, this, _1, _2));
+  this->set_offset_x_srv_ = this->createCameraService<SetIntegerSrv>(srv_name, std::bind(&PylonROS2CameraNode::setOffsetXCallback, this, _1, _2));
   
   srv_name = srv_prefix + "set_offset_y";
-  this->set_offset_y_srv_ = this->create_service<SetIntegerSrv>(srv_name, std::bind(&PylonROS2CameraNode::setOffsetYCallback, this, _1, _2));
+  this->set_offset_y_srv_ = this->createCameraService<SetIntegerSrv>(srv_name, std::bind(&PylonROS2CameraNode::setOffsetYCallback, this, _1, _2));
   
   srv_name = srv_prefix + "set_black_level";
-  this->set_black_level_srv_ = this->create_service<SetIntegerSrv>(srv_name, std::bind(&PylonROS2CameraNode::setBlackLevelCallback, this, _1, _2));
+  this->set_black_level_srv_ = this->createCameraService<SetIntegerSrv>(srv_name, std::bind(&PylonROS2CameraNode::setBlackLevelCallback, this, _1, _2));
   
   srv_name = srv_prefix + "set_demosaicing_mode";
-  this->set_demosaicing_mode_srv_ = this->create_service<SetIntegerSrv>(srv_name, std::bind(&PylonROS2CameraNode::setDemosaicingModeCallback, this, _1, _2));
+  this->set_demosaicing_mode_srv_ = this->createCameraService<SetIntegerSrv>(srv_name, std::bind(&PylonROS2CameraNode::setDemosaicingModeCallback, this, _1, _2));
   
   srv_name = srv_prefix + "set_light_source_preset";
-  this->set_light_source_preset_srv_ = this->create_service<SetIntegerSrv>(srv_name, std::bind(&PylonROS2CameraNode::setLightSourcePresetCallback, this, _1, _2));
+  this->set_light_source_preset_srv_ = this->createCameraService<SetIntegerSrv>(srv_name, std::bind(&PylonROS2CameraNode::setLightSourcePresetCallback, this, _1, _2));
   
   srv_name = srv_prefix + "set_white_balance_auto";
-  this->set_white_balance_auto_srv_ = this->create_service<SetIntegerSrv>(srv_name, std::bind(&PylonROS2CameraNode::setWhiteBalanceAutoCallback, this, _1, _2));
+  this->set_white_balance_auto_srv_ = this->createCameraService<SetIntegerSrv>(srv_name, std::bind(&PylonROS2CameraNode::setWhiteBalanceAutoCallback, this, _1, _2));
   
   srv_name = srv_prefix + "set_sensor_readout_mode";
-  this->set_sensor_readout_mode_srv_ = this->create_service<SetIntegerSrv>(srv_name, std::bind(&PylonROS2CameraNode::setSensorReadoutModeCallback, this, _1, _2));
+  this->set_sensor_readout_mode_srv_ = this->createCameraService<SetIntegerSrv>(srv_name, std::bind(&PylonROS2CameraNode::setSensorReadoutModeCallback, this, _1, _2));
   
   srv_name = srv_prefix + "set_acquisition_frame_count";
-  this->set_acquisition_frame_count_srv_ = this->create_service<SetIntegerSrv>(srv_name, std::bind(&PylonROS2CameraNode::setAcquisitionFrameCountCallback, this, _1, _2));
+  this->set_acquisition_frame_count_srv_ = this->createCameraService<SetIntegerSrv>(srv_name, std::bind(&PylonROS2CameraNode::setAcquisitionFrameCountCallback, this, _1, _2));
   
   srv_name = srv_prefix + "set_trigger_selector";
-  this->set_trigger_selector_srv_ = this->create_service<SetIntegerSrv>(srv_name, std::bind(&PylonROS2CameraNode::setTriggerSelectorCallback, this, _1, _2));
+  this->set_trigger_selector_srv_ = this->createCameraService<SetIntegerSrv>(srv_name, std::bind(&PylonROS2CameraNode::setTriggerSelectorCallback, this, _1, _2));
   
   srv_name = srv_prefix + "set_trigger_source";
-  this->set_trigger_source_srv_ = this->create_service<SetIntegerSrv>(srv_name, std::bind(&PylonROS2CameraNode::setTriggerSourceCallback, this, _1, _2));
+  this->set_trigger_source_srv_ = this->createCameraService<SetIntegerSrv>(srv_name, std::bind(&PylonROS2CameraNode::setTriggerSourceCallback, this, _1, _2));
   
   srv_name = srv_prefix + "set_trigger_activation";
-  this->set_trigger_activation_srv_ = this->create_service<SetIntegerSrv>(srv_name, std::bind(&PylonROS2CameraNode::setTriggerActivationCallback, this, _1, _2));
+  this->set_trigger_activation_srv_ = this->createCameraService<SetIntegerSrv>(srv_name, std::bind(&PylonROS2CameraNode::setTriggerActivationCallback, this, _1, _2));
   
   srv_name = srv_prefix + "set_line_selector";
-  this->set_line_selector_srv_ = this->create_service<SetIntegerSrv>(srv_name, std::bind(&PylonROS2CameraNode::setLineSelectorCallback, this, _1, _2));
+  this->set_line_selector_srv_ = this->createCameraService<SetIntegerSrv>(srv_name, std::bind(&PylonROS2CameraNode::setLineSelectorCallback, this, _1, _2));
   
   srv_name = srv_prefix + "set_line_mode";
-  this->set_line_mode_srv_ = this->create_service<SetIntegerSrv>(srv_name, std::bind(&PylonROS2CameraNode::setLineModeCallback, this, _1, _2));
+  this->set_line_mode_srv_ = this->createCameraService<SetIntegerSrv>(srv_name, std::bind(&PylonROS2CameraNode::setLineModeCallback, this, _1, _2));
   
   srv_name = srv_prefix + "set_line_source";
-  this->set_line_source_srv_ = this->create_service<SetIntegerSrv>(srv_name, std::bind(&PylonROS2CameraNode::setLineSourceCallback, this, _1, _2));
+  this->set_line_source_srv_ = this->createCameraService<SetIntegerSrv>(srv_name, std::bind(&PylonROS2CameraNode::setLineSourceCallback, this, _1, _2));
   
   srv_name = srv_prefix + "set_user_set_selector";
-  this->set_user_set_selector_srv_ = this->create_service<SetIntegerSrv>(srv_name, std::bind(&PylonROS2CameraNode::setUserSetSelectorCallback, this, _1, _2));
+  this->set_user_set_selector_srv_ = this->createCameraService<SetIntegerSrv>(srv_name, std::bind(&PylonROS2CameraNode::setUserSetSelectorCallback, this, _1, _2));
   
   srv_name = srv_prefix + "set_user_set_default_selector";
-  this->set_user_set_default_selector_srv_ = this->create_service<SetIntegerSrv>(srv_name, std::bind(&PylonROS2CameraNode::setUserSetDefaultSelectorCallback, this, _1, _2));
+  this->set_user_set_default_selector_srv_ = this->createCameraService<SetIntegerSrv>(srv_name, std::bind(&PylonROS2CameraNode::setUserSetDefaultSelectorCallback, this, _1, _2));
   
   srv_name = srv_prefix + "set_device_link_throughput_limit";
-  this->set_device_link_throughput_limit_srv_ = this->create_service<SetIntegerSrv>(srv_name, std::bind(&PylonROS2CameraNode::setDeviceLinkThroughputLimitCallback, this, _1, _2));
+  this->set_device_link_throughput_limit_srv_ = this->createCameraService<SetIntegerSrv>(srv_name, std::bind(&PylonROS2CameraNode::setDeviceLinkThroughputLimitCallback, this, _1, _2));
   
   srv_name = srv_prefix + "set_max_transfer_size";
-  this->set_max_transfer_size_srv_ = this->create_service<SetIntegerSrv>(srv_name, std::bind(&PylonROS2CameraNode::setMaxTransferSizeCallback, this, _1, _2));
+  this->set_max_transfer_size_srv_ = this->createCameraService<SetIntegerSrv>(srv_name, std::bind(&PylonROS2CameraNode::setMaxTransferSizeCallback, this, _1, _2));
   
   srv_name = srv_prefix + "set_gamma_selector";
-  this->set_gamma_selector_srv_ = this->create_service<SetIntegerSrv>(srv_name, std::bind(&PylonROS2CameraNode::setGammaSelectorCallback, this, _1, _2));
+  this->set_gamma_selector_srv_ = this->createCameraService<SetIntegerSrv>(srv_name, std::bind(&PylonROS2CameraNode::setGammaSelectorCallback, this, _1, _2));
   
   srv_name = srv_prefix + "set_grab_timeout";
-  this->set_grab_timeout_srv_ = this->create_service<SetIntegerSrv>(srv_name, std::bind(&PylonROS2CameraNode::setGrabTimeoutCallback, this, _1, _2));
+  this->set_grab_timeout_srv_ = this->createCameraService<SetIntegerSrv>(srv_name, std::bind(&PylonROS2CameraNode::setGrabTimeoutCallback, this, _1, _2));
   
   srv_name = srv_prefix + "set_trigger_timeout";
-  this->set_trigger_timeout_srv_ = this->create_service<SetIntegerSrv>(srv_name, std::bind(&PylonROS2CameraNode::setTriggerTimeoutCallback, this, _1, _2));
+  this->set_trigger_timeout_srv_ = this->createCameraService<SetIntegerSrv>(srv_name, std::bind(&PylonROS2CameraNode::setTriggerTimeoutCallback, this, _1, _2));
   
   srv_name = srv_prefix + "set_grabbing_strategy";
-  this->set_grabbing_strategy_srv_ = this->create_service<SetIntegerSrv>(srv_name, std::bind(&PylonROS2CameraNode::setGrabbingStrategyCallback, this, _1, _2));
+  this->set_grabbing_strategy_srv_ = this->createCameraService<SetIntegerSrv>(srv_name, std::bind(&PylonROS2CameraNode::setGrabbingStrategyCallback, this, _1, _2));
   
   srv_name = srv_prefix + "set_output_queue_size";
-  this->set_output_queue_size_srv_ = this->create_service<SetIntegerSrv>(srv_name, std::bind(&PylonROS2CameraNode::setOutputQueueSizeCallback, this, _1, _2));
+  this->set_output_queue_size_srv_ = this->createCameraService<SetIntegerSrv>(srv_name, std::bind(&PylonROS2CameraNode::setOutputQueueSizeCallback, this, _1, _2));
   
   srv_name = srv_prefix + "set_max_num_buffer";
-  this->set_max_num_buffer_srv_ = this->create_service<SetIntegerSrv>(srv_name, std::bind(&PylonROS2CameraNode::setMaxNumBufferCallback, this, _1, _2));
+  this->set_max_num_buffer_srv_ = this->createCameraService<SetIntegerSrv>(srv_name, std::bind(&PylonROS2CameraNode::setMaxNumBufferCallback, this, _1, _2));
   
   srv_name = srv_prefix + "set_chunk_selector";
-  this->set_chunk_selector_srv_ = this->create_service<SetIntegerSrv>(srv_name, std::bind(&PylonROS2CameraNode::setChunkSelectorCallback, this, _1, _2));
+  this->set_chunk_selector_srv_ = this->createCameraService<SetIntegerSrv>(srv_name, std::bind(&PylonROS2CameraNode::setChunkSelectorCallback, this, _1, _2));
   
   srv_name = srv_prefix + "set_timer_selector";
-  this->set_timer_selector_srv_ = this->create_service<SetIntegerSrv>(srv_name, std::bind(&PylonROS2CameraNode::setTimerSelectorCallback, this, _1, _2));
+  this->set_timer_selector_srv_ = this->createCameraService<SetIntegerSrv>(srv_name, std::bind(&PylonROS2CameraNode::setTimerSelectorCallback, this, _1, _2));
 
   srv_name = srv_prefix + "set_timer_trigger_source";
-  this->set_timer_trigger_source_srv_ = this->create_service<SetIntegerSrv>(srv_name, std::bind(&PylonROS2CameraNode::setTimerTriggerSourceCallback, this, _1, _2));
+  this->set_timer_trigger_source_srv_ = this->createCameraService<SetIntegerSrv>(srv_name, std::bind(&PylonROS2CameraNode::setTimerTriggerSourceCallback, this, _1, _2));
 
   srv_name = srv_prefix + "set_ptp_priority";
-  this->set_ptp_priority_srv_ = this->create_service<SetIntegerSrv>(srv_name, std::bind(&PylonROS2CameraNode::setPTPPriorityCallback, this, _1, _2));
+  this->set_ptp_priority_srv_ = this->createCameraService<SetIntegerSrv>(srv_name, std::bind(&PylonROS2CameraNode::setPTPPriorityCallback, this, _1, _2));
   
   srv_name = srv_prefix + "set_ptp_profile";
-  this->set_ptp_profile_srv_ = this->create_service<SetIntegerSrv>(srv_name, std::bind(&PylonROS2CameraNode::setPTPProfileCallback, this, _1, _2));
+  this->set_ptp_profile_srv_ = this->createCameraService<SetIntegerSrv>(srv_name, std::bind(&PylonROS2CameraNode::setPTPProfileCallback, this, _1, _2));
   
   srv_name = srv_prefix + "set_ptp_network_mode";
-  this->set_ptp_network_mode_srv_ = this->create_service<SetIntegerSrv>(srv_name, std::bind(&PylonROS2CameraNode::setPTPNetworkModeCallback, this, _1, _2));
+  this->set_ptp_network_mode_srv_ = this->createCameraService<SetIntegerSrv>(srv_name, std::bind(&PylonROS2CameraNode::setPTPNetworkModeCallback, this, _1, _2));
   
   srv_name = srv_prefix + "set_ptp_uc_port_address_index";
-  this->set_ptp_uc_port_address_index_srv_ = this->create_service<SetIntegerSrv>(srv_name, std::bind(&PylonROS2CameraNode::setPTPUCPortAddressIndexCallback, this, _1, _2));
+  this->set_ptp_uc_port_address_index_srv_ = this->createCameraService<SetIntegerSrv>(srv_name, std::bind(&PylonROS2CameraNode::setPTPUCPortAddressIndexCallback, this, _1, _2));
   
   srv_name = srv_prefix + "set_ptp_uc_port_address";
-  this->set_ptp_uc_port_address_srv_ = this->create_service<SetIntegerSrv>(srv_name, std::bind(&PylonROS2CameraNode::setPTPUCPortAddressCallback, this, _1, _2));
+  this->set_ptp_uc_port_address_srv_ = this->createCameraService<SetIntegerSrv>(srv_name, std::bind(&PylonROS2CameraNode::setPTPUCPortAddressCallback, this, _1, _2));
   
   srv_name = srv_prefix + "set_sync_free_run_timer_start_time_low";
-  this->set_sync_free_run_timer_start_time_low_srv_ = this->create_service<SetIntegerSrv>(srv_name, std::bind(&PylonROS2CameraNode::setSyncFreeRunTimerStartTimeLowCallback, this, _1, _2));
+  this->set_sync_free_run_timer_start_time_low_srv_ = this->createCameraService<SetIntegerSrv>(srv_name, std::bind(&PylonROS2CameraNode::setSyncFreeRunTimerStartTimeLowCallback, this, _1, _2));
   
   srv_name = srv_prefix + "set_sync_free_run_timer_start_time_high";
-  this->set_sync_free_run_timer_start_time_high_srv_ = this->create_service<SetIntegerSrv>(srv_name, std::bind(&PylonROS2CameraNode::setSyncFreeRunTimerStartTimeHighCallback, this, _1, _2));
+  this->set_sync_free_run_timer_start_time_high_srv_ = this->createCameraService<SetIntegerSrv>(srv_name, std::bind(&PylonROS2CameraNode::setSyncFreeRunTimerStartTimeHighCallback, this, _1, _2));
   
   srv_name = srv_prefix + "set_depth_min";
-  this->set_depth_min_srv_ = this->create_service<SetIntegerSrv>(srv_name, std::bind(&PylonROS2CameraNode::setDepthMinCallback, this, _1, _2));
+  this->set_depth_min_srv_ = this->createCameraService<SetIntegerSrv>(srv_name, std::bind(&PylonROS2CameraNode::setDepthMinCallback, this, _1, _2));
   
   srv_name = srv_prefix + "set_depth_max";
-  this->set_depth_max_srv_ = this->create_service<SetIntegerSrv>(srv_name, std::bind(&PylonROS2CameraNode::setDepthMaxCallback, this, _1, _2));
+  this->set_depth_max_srv_ = this->createCameraService<SetIntegerSrv>(srv_name, std::bind(&PylonROS2CameraNode::setDepthMaxCallback, this, _1, _2));
   
   srv_name = srv_prefix + "set_temporal_filter_strength";
-  this->set_temporal_filter_strength_srv_ = this->create_service<SetIntegerSrv>(srv_name, std::bind(&PylonROS2CameraNode::setTemporalFilterStrengthCallback, this, _1, _2));
+  this->set_temporal_filter_strength_srv_ = this->createCameraService<SetIntegerSrv>(srv_name, std::bind(&PylonROS2CameraNode::setTemporalFilterStrengthCallback, this, _1, _2));
   
   srv_name = srv_prefix + "set_outlier_removal_threshold";
-  this->set_outlier_removal_threshold_srv_ = this->create_service<SetIntegerSrv>(srv_name, std::bind(&PylonROS2CameraNode::setOutlierRemovalThresholdCallback, this, _1, _2));
+  this->set_outlier_removal_threshold_srv_ = this->createCameraService<SetIntegerSrv>(srv_name, std::bind(&PylonROS2CameraNode::setOutlierRemovalThresholdCallback, this, _1, _2));
   
   srv_name = srv_prefix + "set_outlier_removal_tolerance";
-  this->set_outlier_removal_tolerance_srv_ = this->create_service<SetIntegerSrv>(srv_name, std::bind(&PylonROS2CameraNode::setOutlierRemovalToleranceCallback, this, _1, _2));
+  this->set_outlier_removal_tolerance_srv_ = this->createCameraService<SetIntegerSrv>(srv_name, std::bind(&PylonROS2CameraNode::setOutlierRemovalToleranceCallback, this, _1, _2));
   
   srv_name = srv_prefix + "set_ambiguity_filter_threshold";
-  this->set_ambiguity_filter_threshold_srv_ = this->create_service<SetIntegerSrv>(srv_name, std::bind(&PylonROS2CameraNode::setAmbiguityFilterThresholdCallback, this, _1, _2));
+  this->set_ambiguity_filter_threshold_srv_ = this->createCameraService<SetIntegerSrv>(srv_name, std::bind(&PylonROS2CameraNode::setAmbiguityFilterThresholdCallback, this, _1, _2));
   
   srv_name = srv_prefix + "set_confidence_threshold";
-  this->set_confidence_threshold_srv_ = this->create_service<SetIntegerSrv>(srv_name, std::bind(&PylonROS2CameraNode::setConfidenceThresholdCallback, this, _1, _2));
+  this->set_confidence_threshold_srv_ = this->createCameraService<SetIntegerSrv>(srv_name, std::bind(&PylonROS2CameraNode::setConfidenceThresholdCallback, this, _1, _2));
   
   srv_name = srv_prefix + "set_intensity_calculation";
-  this->set_intensity_calculation_srv_ = this->create_service<SetIntegerSrv>(srv_name, std::bind(&PylonROS2CameraNode::setIntensityCalculationCallback, this, _1, _2));
+  this->set_intensity_calculation_srv_ = this->createCameraService<SetIntegerSrv>(srv_name, std::bind(&PylonROS2CameraNode::setIntensityCalculationCallback, this, _1, _2));
   
   srv_name = srv_prefix + "set_exposure_time_selector";
-  this->set_exposure_time_selector_srv_ = this->create_service<SetIntegerSrv>(srv_name, std::bind(&PylonROS2CameraNode::setExposureTimeSelectorCallback, this, _1, _2));
+  this->set_exposure_time_selector_srv_ = this->createCameraService<SetIntegerSrv>(srv_name, std::bind(&PylonROS2CameraNode::setExposureTimeSelectorCallback, this, _1, _2));
   
   srv_name = srv_prefix + "set_operating_mode";
-  this->set_operating_mode_srv_ = this->create_service<SetIntegerSrv>(srv_name, std::bind(&PylonROS2CameraNode::setOperatingModeCallback, this, _1, _2));
+  this->set_operating_mode_srv_ = this->createCameraService<SetIntegerSrv>(srv_name, std::bind(&PylonROS2CameraNode::setOperatingModeCallback, this, _1, _2));
   
   srv_name = srv_prefix + "set_multi_camera_channel";
-  this->set_multi_camera_channel_srv_ = this->create_service<SetIntegerSrv>(srv_name, std::bind(&PylonROS2CameraNode::setMultiCameraChannelCallback, this, _1, _2));
+  this->set_multi_camera_channel_srv_ = this->createCameraService<SetIntegerSrv>(srv_name, std::bind(&PylonROS2CameraNode::setMultiCameraChannelCallback, this, _1, _2));
   
   srv_name = srv_prefix + "set_noise_reduction";
-  this->set_noise_reduction_srv_ = this->create_service<SetFloatSrv>(srv_name, std::bind(&PylonROS2CameraNode::setNoiseReductionCallback, this, _1, _2));
+  this->set_noise_reduction_srv_ = this->createCameraService<SetFloatSrv>(srv_name, std::bind(&PylonROS2CameraNode::setNoiseReductionCallback, this, _1, _2));
   
   srv_name = srv_prefix + "set_sharpness_enhancement";
-  this->set_sharpness_enhancement_srv_ = this->create_service<SetFloatSrv>(srv_name, std::bind(&PylonROS2CameraNode::setSharpnessEnhancementCallback, this, _1, _2));
+  this->set_sharpness_enhancement_srv_ = this->createCameraService<SetFloatSrv>(srv_name, std::bind(&PylonROS2CameraNode::setSharpnessEnhancementCallback, this, _1, _2));
   
   srv_name = srv_prefix + "set_trigger_delay";
-  this->set_trigger_delay_srv_ = this->create_service<SetFloatSrv>(srv_name, std::bind(&PylonROS2CameraNode::setTriggerDelayCallback, this, _1, _2));
+  this->set_trigger_delay_srv_ = this->createCameraService<SetFloatSrv>(srv_name, std::bind(&PylonROS2CameraNode::setTriggerDelayCallback, this, _1, _2));
   
   srv_name = srv_prefix + "set_line_debouncer_time";
-  this->set_line_debouncer_time_srv_ = this->create_service<SetFloatSrv>(srv_name, std::bind(&PylonROS2CameraNode::setLineDebouncerTimeCallback, this, _1, _2));
+  this->set_line_debouncer_time_srv_ = this->createCameraService<SetFloatSrv>(srv_name, std::bind(&PylonROS2CameraNode::setLineDebouncerTimeCallback, this, _1, _2));
   
   srv_name = srv_prefix + "set_chunk_exposure_time";
-  this->set_chunk_exposure_time_srv_ = this->create_service<SetFloatSrv>(srv_name, std::bind(&PylonROS2CameraNode::setChunkExposureTimeCallback, this, _1, _2));
+  this->set_chunk_exposure_time_srv_ = this->createCameraService<SetFloatSrv>(srv_name, std::bind(&PylonROS2CameraNode::setChunkExposureTimeCallback, this, _1, _2));
   
   srv_name = srv_prefix + "set_timer_duration";
-  this->set_timer_duration_srv_ = this->create_service<SetFloatSrv>(srv_name, std::bind(&PylonROS2CameraNode::setTimerDurationCallback, this, _1, _2));
+  this->set_timer_duration_srv_ = this->createCameraService<SetFloatSrv>(srv_name, std::bind(&PylonROS2CameraNode::setTimerDurationCallback, this, _1, _2));
   
   srv_name = srv_prefix + "set_periodic_signal_period";
-  this->set_periodic_signal_period_srv_ = this->create_service<SetFloatSrv>(srv_name, std::bind(&PylonROS2CameraNode::setPeriodicSignalPeriodCallback, this, _1, _2));
+  this->set_periodic_signal_period_srv_ = this->createCameraService<SetFloatSrv>(srv_name, std::bind(&PylonROS2CameraNode::setPeriodicSignalPeriodCallback, this, _1, _2));
   
   srv_name = srv_prefix + "set_periodic_signal_delay";
-  this->set_periodic_signal_delay_srv_ = this->create_service<SetFloatSrv>(srv_name, std::bind(&PylonROS2CameraNode::setPeriodicSignalDelayCallback, this, _1, _2));
+  this->set_periodic_signal_delay_srv_ = this->createCameraService<SetFloatSrv>(srv_name, std::bind(&PylonROS2CameraNode::setPeriodicSignalDelayCallback, this, _1, _2));
   
   srv_name = srv_prefix + "set_sync_free_run_timer_trigger_rate_abs";
-  this->set_sync_free_run_timer_trigger_rate_abs_srv_ = this->create_service<SetFloatSrv>(srv_name, std::bind(&PylonROS2CameraNode::setSyncFreeRunTimerTriggerRateAbsCallback, this, _1, _2));
+  this->set_sync_free_run_timer_trigger_rate_abs_srv_ = this->createCameraService<SetFloatSrv>(srv_name, std::bind(&PylonROS2CameraNode::setSyncFreeRunTimerTriggerRateAbsCallback, this, _1, _2));
   
   srv_name = srv_prefix + "set_acquisition_frame_rate";
-  this->set_acquisition_frame_rate_srv_ = this->create_service<SetFloatSrv>(srv_name, std::bind(&PylonROS2CameraNode::setAcquisitionFrameRateCallback, this, _1, _2));
+  this->set_acquisition_frame_rate_srv_ = this->createCameraService<SetFloatSrv>(srv_name, std::bind(&PylonROS2CameraNode::setAcquisitionFrameRateCallback, this, _1, _2));
  
   srv_name = srv_prefix + "set_scan_3d_calibration_offset";
-  this->set_scan_3d_calibration_offset_srv_ = this->create_service<SetFloatSrv>(srv_name, std::bind(&PylonROS2CameraNode::setScan3dCalibrationOffsetCallback, this, _1, _2));
+  this->set_scan_3d_calibration_offset_srv_ = this->createCameraService<SetFloatSrv>(srv_name, std::bind(&PylonROS2CameraNode::setScan3dCalibrationOffsetCallback, this, _1, _2));
  
   srv_name = srv_prefix + "set_image_encoding";
-  this->set_image_encoding_srv_ = this->create_service<SetStringSrv>(srv_name, std::bind(&PylonROS2CameraNode::setImageEncodingCallback, this, _1, _2));
+  this->set_image_encoding_srv_ = this->createCameraService<SetStringSrv>(srv_name, std::bind(&PylonROS2CameraNode::setImageEncodingCallback, this, _1, _2));
   
   srv_name = srv_prefix + "set_reverse_x";
-  this->set_reverse_x_srv_ = this->create_service<SetBoolSrv>(srv_name, std::bind(&PylonROS2CameraNode::setReverseXCallback, this, _1, _2));
+  this->set_reverse_x_srv_ = this->createCameraService<SetBoolSrv>(srv_name, std::bind(&PylonROS2CameraNode::setReverseXCallback, this, _1, _2));
   
   srv_name = srv_prefix + "set_reverse_y";
-  this->set_reverse_y_srv_ = this->create_service<SetBoolSrv>(srv_name, std::bind(&PylonROS2CameraNode::setReverseYCallback, this, _1, _2));
+  this->set_reverse_y_srv_ = this->createCameraService<SetBoolSrv>(srv_name, std::bind(&PylonROS2CameraNode::setReverseYCallback, this, _1, _2));
   
   srv_name = srv_prefix + "set_PGI_mode";
-  this->set_PGI_mode_srv_ = this->create_service<SetBoolSrv>(srv_name, std::bind(&PylonROS2CameraNode::setPGIModeCallback, this, _1, _2));
+  this->set_PGI_mode_srv_ = this->createCameraService<SetBoolSrv>(srv_name, std::bind(&PylonROS2CameraNode::setPGIModeCallback, this, _1, _2));
   
   srv_name = srv_prefix + "set_trigger_mode";
-  this->set_trigger_mode_srv_ = this->create_service<SetBoolSrv>(srv_name, std::bind(&PylonROS2CameraNode::setTriggerModeCallback, this, _1, _2));
+  this->set_trigger_mode_srv_ = this->createCameraService<SetBoolSrv>(srv_name, std::bind(&PylonROS2CameraNode::setTriggerModeCallback, this, _1, _2));
   
   srv_name = srv_prefix + "set_line_inverter";
-  this->set_line_inverter_srv_ = this->create_service<SetBoolSrv>(srv_name, std::bind(&PylonROS2CameraNode::setLineInverterCallback, this, _1, _2));
+  this->set_line_inverter_srv_ = this->createCameraService<SetBoolSrv>(srv_name, std::bind(&PylonROS2CameraNode::setLineInverterCallback, this, _1, _2));
   
   srv_name = srv_prefix + "set_device_link_throughput_limit_mode";
-  this->set_device_link_throughput_limit_mode_srv_ = this->create_service<SetBoolSrv>(srv_name, std::bind(&PylonROS2CameraNode::setDeviceLinkThroughputLimitModeCallback, this, _1, _2));
+  this->set_device_link_throughput_limit_mode_srv_ = this->createCameraService<SetBoolSrv>(srv_name, std::bind(&PylonROS2CameraNode::setDeviceLinkThroughputLimitModeCallback, this, _1, _2));
   
   srv_name = srv_prefix + "set_gamma_activation";
-  this->set_gamma_activation_srv_ = this->create_service<SetBoolSrv>(srv_name, std::bind(&PylonROS2CameraNode::setGammaEnableCallback, this, _1, _2));
+  this->set_gamma_activation_srv_ = this->createCameraService<SetBoolSrv>(srv_name, std::bind(&PylonROS2CameraNode::setGammaEnableCallback, this, _1, _2));
   
   srv_name = srv_prefix + "set_chunk_mode_active";
-  this->set_chunk_mode_active_srv_ = this->create_service<SetBoolSrv>(srv_name, std::bind(&PylonROS2CameraNode::setChunkModeActiveCallback, this, _1, _2));
+  this->set_chunk_mode_active_srv_ = this->createCameraService<SetBoolSrv>(srv_name, std::bind(&PylonROS2CameraNode::setChunkModeActiveCallback, this, _1, _2));
   
   srv_name = srv_prefix + "set_chunk_enable";
-  this->set_chunk_enable_srv_ = this->create_service<SetBoolSrv>(srv_name, std::bind(&PylonROS2CameraNode::setChunkEnableCallback, this, _1, _2));
+  this->set_chunk_enable_srv_ = this->createCameraService<SetBoolSrv>(srv_name, std::bind(&PylonROS2CameraNode::setChunkEnableCallback, this, _1, _2));
 
   srv_name = srv_prefix + "enable_ptp_management_protocol";
-  this->enable_ptp_management_protocol_srv_ = this->create_service<SetBoolSrv>(srv_name, std::bind(&PylonROS2CameraNode::enablePTPManagementProtocolCallback, this, _1, _2));
+  this->enable_ptp_management_protocol_srv_ = this->createCameraService<SetBoolSrv>(srv_name, std::bind(&PylonROS2CameraNode::enablePTPManagementProtocolCallback, this, _1, _2));
   
   srv_name = srv_prefix + "enable_two_step_operation";
-  this->enable_two_step_operation_srv_ = this->create_service<SetBoolSrv>(srv_name, std::bind(&PylonROS2CameraNode::enablePTPTwoStepOperationCallback, this, _1, _2));
+  this->enable_two_step_operation_srv_ = this->createCameraService<SetBoolSrv>(srv_name, std::bind(&PylonROS2CameraNode::enablePTPTwoStepOperationCallback, this, _1, _2));
 
   srv_name = srv_prefix + "enable_ptp";
-  this->enable_ptp_srv_ = this->create_service<SetBoolSrv>(srv_name, std::bind(&PylonROS2CameraNode::enablePTPCallback, this, _1, _2));
+  this->enable_ptp_srv_ = this->createCameraService<SetBoolSrv>(srv_name, std::bind(&PylonROS2CameraNode::enablePTPCallback, this, _1, _2));
 
   srv_name = srv_prefix + "get_ptp_status";
-  this->get_ptp_status_srv_ = this->create_service<GetPtpStatusSrv>(srv_name, std::bind(&PylonROS2CameraNode::getPTPStatusCallback, this, _1, _2));
+  this->get_ptp_status_srv_ = this->createCameraService<GetPtpStatusSrv>(srv_name, std::bind(&PylonROS2CameraNode::getPTPStatusCallback, this, _1, _2));
 
   srv_name = srv_prefix + "enable_sync_free_run_timer";
-  this->enable_sync_free_run_timer_srv_ = this->create_service<SetBoolSrv>(srv_name, std::bind(&PylonROS2CameraNode::enableSyncFreeRunTimerCallback, this, _1, _2));
+  this->enable_sync_free_run_timer_srv_ = this->createCameraService<SetBoolSrv>(srv_name, std::bind(&PylonROS2CameraNode::enableSyncFreeRunTimerCallback, this, _1, _2));
 
   srv_name = srv_prefix + "enable_spatial_filter";
-  this->enable_spatial_filter_srv_ = this->create_service<SetBoolSrv>(srv_name, std::bind(&PylonROS2CameraNode::enableSpatialFilterCallback, this, _1, _2));
+  this->enable_spatial_filter_srv_ = this->createCameraService<SetBoolSrv>(srv_name, std::bind(&PylonROS2CameraNode::enableSpatialFilterCallback, this, _1, _2));
 
   srv_name = srv_prefix + "enable_temporal_filter";
-  this->enable_temporal_filter_srv_ = this->create_service<SetBoolSrv>(srv_name, std::bind(&PylonROS2CameraNode::enableTemporalFilterCallback, this, _1, _2));
+  this->enable_temporal_filter_srv_ = this->createCameraService<SetBoolSrv>(srv_name, std::bind(&PylonROS2CameraNode::enableTemporalFilterCallback, this, _1, _2));
 
   srv_name = srv_prefix + "enable_outlier_removal";
-  this->enable_outlier_removal_srv_ = this->create_service<SetBoolSrv>(srv_name, std::bind(&PylonROS2CameraNode::enableOutlierRemovalCallback, this, _1, _2));
+  this->enable_outlier_removal_srv_ = this->createCameraService<SetBoolSrv>(srv_name, std::bind(&PylonROS2CameraNode::enableOutlierRemovalCallback, this, _1, _2));
 
   srv_name = srv_prefix + "enable_ambiguity_filter";
-  this->enable_ambiguity_filter_srv_ = this->create_service<SetBoolSrv>(srv_name, std::bind(&PylonROS2CameraNode::enableAmbiguityFilterCallback, this, _1, _2));
+  this->enable_ambiguity_filter_srv_ = this->createCameraService<SetBoolSrv>(srv_name, std::bind(&PylonROS2CameraNode::enableAmbiguityFilterCallback, this, _1, _2));
 
   srv_name = srv_prefix + "enable_thermal_drift_correction";
-  this->enable_thermal_drift_correction_srv_ = this->create_service<SetBoolSrv>(srv_name, std::bind(&PylonROS2CameraNode::enableThermalDriftCorrectionCallback, this, _1, _2));
+  this->enable_thermal_drift_correction_srv_ = this->createCameraService<SetBoolSrv>(srv_name, std::bind(&PylonROS2CameraNode::enableThermalDriftCorrectionCallback, this, _1, _2));
 
   srv_name = srv_prefix + "enable_distortion_correction";
-  this->enable_distortion_correction_srv_ = this->create_service<SetBoolSrv>(srv_name, std::bind(&PylonROS2CameraNode::enableDistortionCorrectionCallback, this, _1, _2));
+  this->enable_distortion_correction_srv_ = this->createCameraService<SetBoolSrv>(srv_name, std::bind(&PylonROS2CameraNode::enableDistortionCorrectionCallback, this, _1, _2));
 
   srv_name = srv_prefix + "enable_acquisition_frame_rate";
-  this->enable_acquisition_frame_rate_srv_ = this->create_service<SetBoolSrv>(srv_name, std::bind(&PylonROS2CameraNode::enableAcquisitionFrameRateCallback, this, _1, _2));
+  this->enable_acquisition_frame_rate_srv_ = this->createCameraService<SetBoolSrv>(srv_name, std::bind(&PylonROS2CameraNode::enableAcquisitionFrameRateCallback, this, _1, _2));
 
   srv_name = srv_prefix + "enable_hdr_mode";
-  this->enable_hdr_mode_srv_ = this->create_service<SetBoolSrv>(srv_name, std::bind(&PylonROS2CameraNode::enableHDRModeCallback, this, _1, _2));
+  this->enable_hdr_mode_srv_ = this->createCameraService<SetBoolSrv>(srv_name, std::bind(&PylonROS2CameraNode::enableHDRModeCallback, this, _1, _2));
 
   srv_name = srv_prefix + "enable_fast_mode";
-  this->enable_fast_mode_srv_ = this->create_service<SetBoolSrv>(srv_name, std::bind(&PylonROS2CameraNode::enableFastModeCallback, this, _1, _2));
+  this->enable_fast_mode_srv_ = this->createCameraService<SetBoolSrv>(srv_name, std::bind(&PylonROS2CameraNode::enableFastModeCallback, this, _1, _2));
 
   srv_name = srv_prefix + "execute_software_trigger";
-  this->execute_software_trigger_srv_ = this->create_service<TriggerSrv>(srv_name, std::bind(&PylonROS2CameraNode::executeSoftwareTriggerCallback, this, _1, _2));
+  this->execute_software_trigger_srv_ = this->createCameraService<TriggerSrv>(srv_name, std::bind(&PylonROS2CameraNode::executeSoftwareTriggerCallback, this, _1, _2));
   
   srv_name = srv_prefix + "save_user_set";
-  this->save_user_set_srv_ = this->create_service<TriggerSrv>(srv_name, std::bind(&PylonROS2CameraNode::saveUserSetCallback, this, _1, _2));
+  this->save_user_set_srv_ = this->createCameraService<TriggerSrv>(srv_name, std::bind(&PylonROS2CameraNode::saveUserSetCallback, this, _1, _2));
   
   srv_name = srv_prefix + "load_user_set";
-  this->load_user_set_srv_ = this->create_service<TriggerSrv>(srv_name, std::bind(&PylonROS2CameraNode::loadUserSetCallback, this, _1, _2));
+  this->load_user_set_srv_ = this->createCameraService<TriggerSrv>(srv_name, std::bind(&PylonROS2CameraNode::loadUserSetCallback, this, _1, _2));
 
   srv_name = srv_prefix + "get_pfs";
-  this->get_pfs_srv_ = this->create_service<GetStringSrv>(srv_name, std::bind(&PylonROS2CameraNode::getPfsCallback, this, _1, _2));
+  this->get_pfs_srv_ = this->createCameraService<GetStringSrv>(srv_name, std::bind(&PylonROS2CameraNode::getPfsCallback, this, _1, _2));
 
   srv_name = srv_prefix + "save_pfs";
-  this->save_pfs_srv_ = this->create_service<SetStringSrv>(srv_name, std::bind(&PylonROS2CameraNode::savePfsCallback, this, _1, _2));
+  this->save_pfs_srv_ = this->createCameraService<SetStringSrv>(srv_name, std::bind(&PylonROS2CameraNode::savePfsCallback, this, _1, _2));
 
   srv_name = srv_prefix + "load_pfs";
-  this->load_pfs_srv_ = this->create_service<SetStringSrv>(srv_name, std::bind(&PylonROS2CameraNode::loadPfsCallback, this, _1, _2));
+  this->load_pfs_srv_ = this->createCameraService<SetStringSrv>(srv_name, std::bind(&PylonROS2CameraNode::loadPfsCallback, this, _1, _2));
   
   srv_name = srv_prefix + "reset_device";
-  this->reset_device_srv_ = this->create_service<TriggerSrv>(srv_name, std::bind(&PylonROS2CameraNode::triggerDeviceResetCallback, this, _1, _2));
+  this->reset_device_srv_ = this->createCameraService<TriggerSrv>(srv_name, std::bind(&PylonROS2CameraNode::triggerDeviceResetCallback, this, _1, _2));
   
   srv_name = srv_prefix + "start_grabbing";
-  this->start_grabbing_srv_ = this->create_service<TriggerSrv>(srv_name, std::bind(&PylonROS2CameraNode::startGrabbingCallback, this, _1, _2));
+  this->start_grabbing_srv_ = this->createCameraService<TriggerSrv>(srv_name, std::bind(&PylonROS2CameraNode::startGrabbingCallback, this, _1, _2));
   
   srv_name = srv_prefix + "stop_grabbing";
-  this->stop_grabbing_srv_ = this->create_service<TriggerSrv>(srv_name, std::bind(&PylonROS2CameraNode::stopGrabbingCallback, this, _1, _2));
+  this->stop_grabbing_srv_ = this->createCameraService<TriggerSrv>(srv_name, std::bind(&PylonROS2CameraNode::stopGrabbingCallback, this, _1, _2));
 
   srv_name = srv_prefix + "update_sync_free_run_timer";
-  this->update_sync_free_run_timer_srv_ = this->create_service<TriggerSrv>(srv_name, std::bind(&PylonROS2CameraNode::updateSyncFreeRunTimerCallback, this, _1, _2));
+  this->update_sync_free_run_timer_srv_ = this->createCameraService<TriggerSrv>(srv_name, std::bind(&PylonROS2CameraNode::updateSyncFreeRunTimerCallback, this, _1, _2));
 }
 
 void PylonROS2CameraNode::initActions()
@@ -782,7 +784,7 @@ bool PylonROS2CameraNode::startGrabbing()
     const std::string srv_name = std::string("~/set_user_output_") + std::to_string(i);
     if (!this->serviceExists(srv_name))
     {
-      this->set_user_output_srvs_.at(i) = this->create_service<SetBoolSrv>(
+      this->set_user_output_srvs_.at(i) = this->createCameraService<SetBoolSrv>(
         srv_name,
         [this, i](const std::shared_ptr<SetBoolSrv::Request> request, std::shared_ptr<SetBoolSrv::Response> response)
         {
@@ -793,7 +795,7 @@ bool PylonROS2CameraNode::startGrabbing()
     const std::string srv_name_af = std::string("~/activate_autoflash_output_") + std::to_string(i);
     if (!this->serviceExists(srv_name_af))
     {
-      this->set_user_output_srvs_.at(num_user_outputs + i) = this->create_service<SetBoolSrv>(
+      this->set_user_output_srvs_.at(num_user_outputs + i) = this->createCameraService<SetBoolSrv>(
         srv_name_af,
         [this, i](const std::shared_ptr<SetBoolSrv::Request> request, std::shared_ptr<SetBoolSrv::Response> response)
         {
@@ -1046,15 +1048,6 @@ void PylonROS2CameraNode::spin()
           this->component_status_pub_->publish(this->cm_status_);
         }
 
-        if (this->pylon_camera_ != nullptr)
-        {
-          this->pylon_camera_.reset();
-        }
-
-        // Possible issue here: ROS2 does not allow to shutdown services
-        // Services are shutdown in the ROS 1 pylon version at this level
-        this->set_user_output_srvs_.clear();
-
         rclcpp::Rate r(0.5);
         if (!rclcpp::ok())
           return;
@@ -1062,7 +1055,12 @@ void PylonROS2CameraNode::spin()
 
         if (!rclcpp::ok())
           return;
-        this->init();
+        {
+          std::lock_guard<std::recursive_mutex> lock(this->grab_mutex_);
+          this->pylon_camera_.reset();
+          this->set_user_output_srvs_.clear();
+          this->init();
+        }
 
         continue;
       }
@@ -1081,6 +1079,12 @@ void PylonROS2CameraNode::spin()
         {
           if (!this->grabImage())
           {
+            const double elapsed = rclcpp::Clock().now().seconds() - start_time;
+            if (elapsed < frame_step)
+            {
+              std::this_thread::sleep_for(
+                std::chrono::duration<double>(frame_step - elapsed));
+            }
             continue;
           }
         }
@@ -1154,6 +1158,12 @@ void PylonROS2CameraNode::spin()
 
           if (!this->grabImage())
           {
+            const double elapsed = rclcpp::Clock().now().seconds() - start_time;
+            if (elapsed < frame_step)
+            {
+              std::this_thread::sleep_for(
+                std::chrono::duration<double>(frame_step - elapsed));
+            }
             continue;
           }
 
@@ -1564,17 +1574,17 @@ bool PylonROS2CameraNode::setBrightness(const int& target_brightness,
 
 bool PylonROS2CameraNode::setGain(const float& target_gain, float& reached_gain)
 {
-  if (this->pylon_camera_->isBlaze())
-  {
-    RCLCPP_WARN(LOGGER, "Trying to set gain: there's no gain parameter with the blaze camera - returning -9999.0");
-    reached_gain = -9999.0;
-    return false;
-  }
-
   std::lock_guard<std::recursive_mutex> lock(this->grab_mutex_);
   if (!this->pylon_camera_ || !this->pylon_camera_->isReady())
   {
     RCLCPP_WARN(LOGGER, "Error in setGain(): pylon_camera_ is not ready!");
+    return false;
+  }
+
+  if (this->pylon_camera_->isBlaze())
+  {
+    RCLCPP_WARN(LOGGER, "Trying to set gain: there's no gain parameter with the blaze camera - returning -9999.0");
+    reached_gain = -9999.0;
     return false;
   }
 

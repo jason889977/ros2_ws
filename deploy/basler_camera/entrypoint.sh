@@ -36,7 +36,15 @@ if [[ "${*}" == *"vision_pipeline.launch.py"* ]]; then
   )
 
   if [[ -n "${CAMERA_ID_2:-}" ]]; then
-    CAM2_CONFIG="${CAMERA_CONFIG_2:-$CAM1_CONFIG}"
+    if [[ -z "${CAMERA_CONFIG_2:-}" ]]; then
+      echo "[entrypoint] CAMERA_CONFIG_2 is required when CAMERA_ID_2 is set" >&2
+      exit 64
+    fi
+    CAM2_CONFIG="$CAMERA_CONFIG_2"
+    if [[ "$CAM2_CONFIG" == "$CAM1_CONFIG" ]]; then
+      echo "[entrypoint] CAMERA_CONFIG_2 must differ from CAMERA_CONFIG_FILE" >&2
+      exit 64
+    fi
     CAM2_ARGS=(
       camera_id:="$CAMERA_ID_2"
       camera_config:="$CAM2_CONFIG"
@@ -71,15 +79,18 @@ if [[ "${*}" == *"vision_pipeline.launch.py"* ]]; then
       wait "$PID1" "$PID2" 2>/dev/null || true
     }
     trap _cleanup EXIT INT TERM
-    wait "$PID1"
-    EXIT1=$?
-    wait "$PID2"
-    EXIT2=$?
-    # 传播子进程退出码：任一非零则容器标记为失败，触发 Docker restart
-    if [[ $EXIT1 -ne 0 || $EXIT2 -ne 0 ]]; then
-      echo "[entrypoint] Pipeline exited with errors: cam1=$EXIT1 cam2=$EXIT2" >&2
-      exit 1
+    # 任一路流水线退出时立即结束另一条，避免故障被仍在运行的子进程遮蔽。
+    set +e
+    wait -n "$PID1" "$PID2"
+    PIPELINE_EXIT=$?
+    set -e
+    kill "$PID1" "$PID2" 2>/dev/null || true
+    wait "$PID1" 2>/dev/null || true
+    wait "$PID2" 2>/dev/null || true
+    if [[ $PIPELINE_EXIT -ne 0 ]]; then
+      echo "[entrypoint] Pipeline exited with status $PIPELINE_EXIT" >&2
     fi
+    exit "$PIPELINE_EXIT"
   else
     echo "[entrypoint] Launching single-camera pipeline: $CAM1_ID"
     exec ros2 launch industrial_vision_bringup vision_pipeline.launch.py "${CAM1_ARGS[@]}"

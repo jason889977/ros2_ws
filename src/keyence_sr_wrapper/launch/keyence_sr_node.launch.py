@@ -1,3 +1,5 @@
+import os
+
 from launch import LaunchDescription
 from launch.actions import DeclareLaunchArgument
 from launch.substitutions import LaunchConfiguration
@@ -7,12 +9,12 @@ from launch_ros.actions import Node
 def generate_launch_description():
     scanner_ip_arg = DeclareLaunchArgument(
         'scanner_ip',
-        default_value='172.31.0.91',
+        default_value=os.environ.get('SCANNER_IP', '172.31.0.91'),
         description='IP address of Keyence SR scanner',
     )
     scanner_port_arg = DeclareLaunchArgument(
         'scanner_port',
-        default_value='9004',
+        default_value=os.environ.get('SCANNER_PORT', '9004'),
         description='TCP port of Keyence SR scanner',
     )
     reconnect_interval_arg = DeclareLaunchArgument(

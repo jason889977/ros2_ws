@@ -160,6 +160,10 @@ def launch_pipeline(context):
             'scanner_port': int(scanner_port),
             'reconnect_interval_s': float(reconnect_interval_s),
         }],
+        remappings=[
+            ('~/barcode', scanner_barcode_topic),
+            ('~/trigger', scanner_trigger_topic),
+        ],
     ))
 
     return nodes

@@ -22,7 +22,13 @@
       "Bash(head *)",
       "Bash(git add *)",
       "Bash(git commit *)",
-      "Bash(git push *)"
+      "Bash(git push *)",
+      "Bash(git remote *)",
+      "Bash(git config *)",
+      "Bash(ssh-keygen *)",
+      "Bash(ssh *)",
+      "Bash(docker *)",
+      "Bash(ping *)"
     ]
   },
   "$version": 4

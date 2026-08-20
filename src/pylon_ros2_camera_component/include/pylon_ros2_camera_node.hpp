@@ -97,9 +97,11 @@
 #include <chrono>
 #include <cstddef>
 #include <cstdint>
+#include <functional>
 #include <memory>
 #include <mutex>
 #include <string>
+#include <utility>
 #include <vector>
 
 
@@ -1653,6 +1655,24 @@ protected:
   bool isSleeping();
 
 protected:
+
+  template<typename ServiceT, typename CallbackT>
+  typename rclcpp::Service<ServiceT>::SharedPtr createCameraService(
+    const std::string& service_name, CallbackT&& callback)
+  {
+    using Request = std::shared_ptr<typename ServiceT::Request>;
+    using Response = std::shared_ptr<typename ServiceT::Response>;
+    std::function<void(Request, Response)> guarded_callback =
+      [this, callback = std::forward<CallbackT>(callback)](
+        Request request, Response response) mutable
+      {
+        std::lock_guard<std::recursive_mutex> lock(this->grab_mutex_);
+        callback(request, response);
+      };
+    return this->create_service<ServiceT>(
+      service_name,
+      guarded_callback);
+  }
 
   // camera
   std::unique_ptr<PylonROS2Camera> pylon_camera_;

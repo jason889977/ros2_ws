@@ -1,7 +1,7 @@
 """Unit tests for AprilTag pose reader logic."""
 
 import unittest
-from unittest.mock import MagicMock
+from unittest.mock import MagicMock, patch
 
 import rclpy
 
@@ -53,6 +53,8 @@ class TestAprilTagFrameFromDetection(unittest.TestCase):
         node._known_tag_frames = set()
         node._tag_last_seen = {}
         node._latest_frame_hint = None
+        node._candidate_cache = None
+        node._candidate_cache_dirty = True
         return node
 
     def test_frame_from_valid_detection(self):
@@ -77,6 +79,49 @@ class TestAprilTagFrameFromDetection(unittest.TestCase):
         detection.family = 'tag36h11'
         detection.id = -1
         self.assertEqual(node._frame_from_detection(detection), '')
+        node.destroy_node()
+
+    def test_candidate_cache_expires_stale_tag(self):
+        node = self._make_node()
+        node._known_tag_frames = {'tag36h11:5'}
+        node._tag_last_seen = {'tag36h11:5': 1.0}
+        node._candidate_cache = {'tag36h11:5'}
+        node._candidate_cache_dirty = False
+
+        with patch(
+            'apriltag_pose_reader.apriltag_pose_reader_node.time.monotonic',
+            return_value=3.0,
+        ):
+            self.assertEqual(node._candidate_frames(), set())
+
+        node.destroy_node()
+
+    def test_tf_only_mode_discovers_tag_frame(self):
+        node = self._make_node()
+        transform = MagicMock()
+        transform.child_frame_id = 'tag36h11:3'
+        node._publish_transform = MagicMock()
+        message = MagicMock()
+        message.transforms = [transform]
+
+        node._on_tf_message(message)
+
+        self.assertEqual(node._known_tag_frames, {'tag36h11:3'})
+        node._publish_transform.assert_called_once_with(transform)
+        node.destroy_node()
+
+    def test_tf_only_mode_ignores_non_tag_frame(self):
+        node = self._make_node()
+        transform = MagicMock()
+        transform.child_frame_id = 'tool0'
+        node._publish_transform = MagicMock()
+        message = MagicMock()
+        message.transforms = [transform]
+
+        node._on_tf_message(message)
+
+        self.assertEqual(node._known_tag_frames, set())
+        node._publish_transform.assert_not_called()
         node.destroy_node()
 
 

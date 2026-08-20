@@ -180,7 +180,6 @@ class WeChatQRNode(Node):
         # .value 属性取出实际的值（类型在声明时由默认值推断）。
         image_topic = self.get_parameter('image_topic').value
         model_dir = self.get_parameter('model_dir').value
-        queue_size = self.get_parameter('queue_size').value
         self._use_camera_info = self.get_parameter('use_camera_info').value
         camera_info_topic = self.get_parameter('camera_info_topic').value
         self._qr_size_m = self.get_parameter('qr_size_m').value
@@ -278,7 +277,7 @@ class WeChatQRNode(Node):
                 CameraInfo,
                 camera_info_topic,
                 self._camera_info_callback,
-                10,
+                sensor_qos,
             )
             self.get_logger().info(
                 f'use_camera_info 已启用，订阅 {camera_info_topic}，'
@@ -355,7 +354,9 @@ class WeChatQRNode(Node):
 
         # 前置条件 1：OpenCV 必须包含 wechat_qrcode 模块
         if not has_wechat:
-            self.get_logger().warn('OpenCV does not provide wechat_qrcode, fallback to QRCodeDetector.')
+            self.get_logger().warn(
+                'OpenCV does not provide wechat_qrcode, fallback to QRCodeDetector.'
+            )
             return cv.QRCodeDetector(), 'opencv'
 
         # 前置条件 2：模型文件必须齐全
@@ -420,9 +421,9 @@ class WeChatQRNode(Node):
         # QR 码 3D 物体点（以 QR 码中心为原点，Z 轴朝上）
         # 角点顺序：左上、右上、右下、左下（与 QR 码检测器输出一致）
         object_points = np.array([
-            [-s / 2,  s / 2, 0.0],
-            [ s / 2,  s / 2, 0.0],
-            [ s / 2, -s / 2, 0.0],
+            [-s / 2, s / 2, 0.0],
+            [s / 2, s / 2, 0.0],
+            [s / 2, -s / 2, 0.0],
             [-s / 2, -s / 2, 0.0],
         ], dtype=np.float64)
 
@@ -488,6 +489,16 @@ class WeChatQRNode(Node):
     # QR 码解码
     # ======================================================================
 
+    @staticmethod
+    def _normalize_corners(points):
+        """Return finite QR corners in the canonical (4, 2) shape."""
+        if points is None:
+            return None
+        corners = np.asarray(points, dtype=np.float64).squeeze()
+        if corners.shape != (4, 2) or not np.isfinite(corners).all():
+            return None
+        return corners
+
     def _decode_qr(self, cv_image):
         """
         对一幅 OpenCV 图像进行 QR 码检测与解码。
@@ -512,15 +523,16 @@ class WeChatQRNode(Node):
 
             if isinstance(decoded_info, str):
                 decoded_list = [decoded_info] if decoded_info else []
-                pts_list = [points] if decoded_info and points is not None else []
+                pts_list = [self._normalize_corners(points)] if decoded_info else []
                 return decoded_list, pts_list
 
-            decoded_list = [info for info in decoded_info if info]
+            decoded_list = []
             pts_list = []
-            if points is not None:
-                for i, info in enumerate(decoded_info):
-                    if info and i < len(points):
-                        pts_list.append(np.array(points[i], dtype=np.float64))
+            for i, info in enumerate(decoded_info):
+                if info:
+                    decoded_list.append(info)
+                    point_set = points[i] if points is not None and i < len(points) else None
+                    pts_list.append(self._normalize_corners(point_set))
             return decoded_list, pts_list
 
         # ---- OpenCV 后端 ----
@@ -528,20 +540,25 @@ class WeChatQRNode(Node):
         # 如果未检测到且 detectAndDecodeMulti 可用，再尝试多码检测
         decoded_info, pts, _ = self.detector.detectAndDecode(cv_image)
         if decoded_info:
-            pts_list = [np.array(pts, dtype=np.float64)] if pts is not None else []
+            pts_list = [self._normalize_corners(pts)]
             return [decoded_info], pts_list
 
         if hasattr(self.detector, 'detectAndDecodeMulti'):
             result = self.detector.detectAndDecodeMulti(cv_image)
             if isinstance(result, tuple) and len(result) >= 2:
                 decoded_info = result[1]
-                decoded_list = [info for info in decoded_info if info]
+                decoded_list = []
                 pts_list = []
-                if len(result) >= 3 and result[2] is not None:
-                    raw_pts = result[2]
-                    for i, info in enumerate(decoded_info):
-                        if info and i < len(raw_pts):
-                            pts_list.append(np.array(raw_pts[i], dtype=np.float64))
+                raw_pts = result[2] if len(result) >= 3 else None
+                for i, info in enumerate(decoded_info):
+                    if info:
+                        decoded_list.append(info)
+                        point_set = (
+                            raw_pts[i]
+                            if raw_pts is not None and i < len(raw_pts)
+                            else None
+                        )
+                        pts_list.append(self._normalize_corners(point_set))
                 return decoded_list, pts_list
 
         return [], []
@@ -590,19 +607,19 @@ class WeChatQRNode(Node):
 
         if decoded_info:
             for i, info in enumerate(decoded_info):
-                if not self._should_publish(info):
-                    continue
-                self.get_logger().info(f'✅ 识别到二维码: {info}')
-                str_msg = String()
-                str_msg.data = info
-                self.result_pub.publish(str_msg)
-
                 if self._pose_pub is not None and i < len(points_list):
                     corners = points_list[i]
                     if corners is not None and corners.shape == (4, 2):
                         pose = self._estimate_pose(corners, msg.header)
                         if pose is not None:
                             self._pose_pub.publish(pose)
+
+                if not self._should_publish(info):
+                    continue
+                self.get_logger().info(f'✅ 识别到二维码: {info}')
+                str_msg = String()
+                str_msg.data = info
+                self.result_pub.publish(str_msg)
 
     def image_callback(self, msg: Image):
         """
@@ -644,13 +661,6 @@ class WeChatQRNode(Node):
         # ---- 步骤 3：发布解码结果 ----
         if decoded_info:
             for i, info in enumerate(decoded_info):
-                if not self._should_publish(info):
-                    continue
-                self.get_logger().info(f'✅ 识别到二维码: {info}')
-                str_msg = String()
-                str_msg.data = info
-                self.result_pub.publish(str_msg)
-
                 # 位姿估计（use_camera_info 启用时）
                 if self._pose_pub is not None and i < len(points_list):
                     corners = points_list[i]
@@ -663,6 +673,13 @@ class WeChatQRNode(Node):
                                 f'y={pose.pose.position.y:.3f} '
                                 f'z={pose.pose.position.z:.3f}'
                             )
+
+                if not self._should_publish(info):
+                    continue
+                self.get_logger().info(f'✅ 识别到二维码: {info}')
+                str_msg = String()
+                str_msg.data = info
+                self.result_pub.publish(str_msg)
 
 
 # ============================================================================
