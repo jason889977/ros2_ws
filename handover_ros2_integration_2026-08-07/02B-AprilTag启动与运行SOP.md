@@ -2,7 +2,7 @@
 
 ## 1. 启动统一容器
 
-按 [02-启动与运行SOP.md](02-启动与运行SOP.md) 启动统一容器。生产模式不启动 TCP 图像桥：
+按 [02-启动与运行SOP.md](02-启动与运行SOP.md) 启动统一容器：
 
 1. `sudo -n docker restart basler_camera`
 2. 确认容器 `healthy`。
@@ -38,13 +38,12 @@ ros2 topic echo /apriltag/transform --once
 ros2 run tf2_ros tf2_echo basler_aca2500_106611_18 tag36h11:3
 ```
 
-RViz 图像应选择 `/my_camera/pylon_ros2_camera_node/image_raw`，图像 QoS 设为 `Reliable`；TF/位姿使用 `/apriltag/transform` 和 `/apriltag/pose`。宿主机兼容模式才使用 `/bridge/image_raw`。
+RViz 图像应选择 `/my_camera/pylon_ros2_camera_node/image_raw`，图像 QoS 设为 `Reliable`；TF/位姿使用 `/apriltag/transform` 和 `/apriltag/pose`。
 
 ## 5. 停止
 
 ```bash
 pkill -f 'apriltag_pose_reader|apriltag_node|apriltag_pose_reader.launch.py' || true
-pkill -f 'camera_tcp_bridge.py host' || true
 sudo -n docker stop basler_camera
 ```
 

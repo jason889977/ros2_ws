@@ -111,6 +111,7 @@ ros2 topic echo /apriltag/pose --once
 
 ## 文档入口
 
+- 工控机集成与调用超详细指南：`项目启动运行指南/工控机ROS2集成与调用超详细指南.md`
 - 中文启动 SOP：`handover_ros2_integration_2026-08-07/02-启动与运行SOP.md`
 - 新 PC 依赖安装：`handover_ros2_integration_2026-08-07/06-组件与依赖安装详单.md`
 - Basler 安装说明：`BASLER_INSTALL_GUIDE.md`

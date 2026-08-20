@@ -36,7 +36,7 @@ sudo -n docker exec basler_camera bash -lc \
    timeout 8 ros2 topic hz /my_camera/pylon_ros2_camera_node/image_raw'
 ```
 
-旧版宿主机调试才需要启动图像桥；统一容器生产模式不需要 TCP 桥。统一容器启动后直接检查:
+统一容器启动后直接检查:
 
 ```bash
 source /opt/ros/humble/setup.bash
@@ -44,15 +44,6 @@ source /home/ubuntu/ros2_ws/install/setup.bash
 sudo -n docker exec basler_camera bash -lc \
   'source /opt/ros/humble/setup.bash && source /opt/ros2_ws/install/setup.bash && \
    ros2 node list'
-```
-
-兼容旧版宿主机算法时，才启动 TCP 桥。统一容器主流程不执行以下桥接命令:
-
-```bash
-sudo -n docker cp scripts/camera_tcp_bridge.py basler_camera:/tmp/camera_tcp_bridge.py
-sudo -n docker exec -it basler_camera bash -lc \
-  'source /opt/ros/humble/setup.bash && source /opt/ros2_ws/install/setup.bash && \
-   python3 /tmp/camera_tcp_bridge.py forward --host 127.0.0.1'
 ```
 
 统一容器主流程的判据是容器内 `/detections`、`/apriltag/pose` 和 `/wechat_qr_node/decoded_info` 可用。
@@ -67,7 +58,7 @@ sudo -n docker exec -it basler_camera bash -lc \
 
 当更换相机后，优先按下面顺序恢复到可运行状态。
 
-### 2.1 重新绑定设备号
+### 5.1 重新绑定设备号
 
 先用序列号把新相机绑定成固定的 `device_user_id`，这样后续 launch 不用改。
 
@@ -77,7 +68,7 @@ sudo -n docker exec -it basler_camera bash -lc \
 
 如果你希望这台新相机使用新的名字，也可以把 `106611-18` 换成新的 `device_user_id`，但要同步修改 YAML 里的 `device_user_id`。
 
-### 2.2 必要时重新配置相机 IP
+### 5.2 必要时重新配置相机 IP
 
 如果是 GigE 相机，而且新相机不在当前网段或不可达，先配置 IP 再启动主程序。
 
@@ -100,7 +91,7 @@ ros2 launch pylon_ros2_camera_wrapper ip_configuration.launch.py
 ping -c 5 <相机IP>
 ```
 
-### 2.3 更新运行参数
+### 5.3 更新运行参数
 
 如果你沿用旧的相机命名，通常只需要更新这两个地方：
 
@@ -131,12 +122,11 @@ sudo -n docker exec basler_camera bash -lc \
    ros2 topic hz /my_camera/pylon_ros2_camera_node/image_raw'
 ```
 
-`ros2 topic hz` 显示容器内算法订阅端实际收到的速率；驱动发布计数以容器日志中的 `Image publish FPS` 为准。TCP 桥只用于旧版宿主机调试。
+`ros2 topic hz` 显示容器内算法订阅端实际收到的速率；驱动发布计数以容器日志中的 `Image publish FPS` 为准。
 
 ## 8. 公共停止流程
 
 ```bash
-pkill -f "camera_tcp_bridge.py host" || true
 sudo -n docker stop basler_camera
 ```
 

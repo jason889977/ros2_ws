@@ -17,8 +17,7 @@ docker compose --env-file deploy/basler_camera/.env \
 ```
 
 默认容器同时启动 Basler、AprilTag 和 QR 节点。容器内算法直接订阅
-`/my_camera/pylon_ros2_camera_node/image_raw` 和 `camera_info`，不需要 TCP 图像桥。
-宿主机调试时仍可单独运行 `scripts/camera_tcp_bridge.py`，但它不属于默认生产链路。
+`/my_camera/pylon_ros2_camera_node/image_raw` 和 `camera_info`。
 
 ## 验收
 

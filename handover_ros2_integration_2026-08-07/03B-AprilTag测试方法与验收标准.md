@@ -41,14 +41,14 @@ cd /home/ubuntu/ros2_ws
 source /opt/ros/humble/setup.bash
 source install/setup.bash
 ros2 node list
-ros2 topic info -v /bridge/image_raw
+ros2 topic info -v /my_camera/pylon_ros2_camera_node/image_raw
 ```
 
 通过判据:
 - 存在节点 /my_camera/pylon_ros2_camera_node
 - 存在节点 /apriltag
 - 存在节点 /apriltag_pose_reader
-- /bridge/image_raw: 能实际收到消息
+- /my_camera/pylon_ros2_camera_node/image_raw: 能实际收到消息
 
 不通过判据:
 - 相机或 AprilTag 节点缺失
@@ -134,7 +134,7 @@ rviz2
 命令:
 
 ```bash
-ros2 topic hz /bridge/image_raw
+ros2 topic hz /my_camera/pylon_ros2_camera_node/image_raw
 ros2 topic echo /diagnostics
 ```
 
@@ -144,7 +144,7 @@ ros2 topic echo /diagnostics
 - `ros2 topic hz` 单独记录为订阅端到达率，不要求等于驱动发布计数
 
 说明:
-- `/bridge/image_raw` 到达率受 JPEG 桥接和宿主机负载影响；仅看到容器原始 publisher 不算通过
+- `/my_camera/pylon_ros2_camera_node/image_raw` 到达率应持续稳定；仅看到 publisher 不算通过，必须确认能够实际收到消息
 
 ## 9. 测试项 G: 关键错误码守门
 
