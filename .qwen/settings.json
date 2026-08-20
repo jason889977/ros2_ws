@@ -5,7 +5,24 @@
       "Bash(python3 *)",
       "Bash(source *)",
       "Bash(colcon *)",
-      "Bash(bash *)"
+      "Bash(bash *)",
+      "Bash(do *)",
+      "Bash(then *)",
+      "Bash(else *)",
+      "Bash(fi)",
+      "Bash(done)",
+      "Bash(wc *)",
+      "Bash(tail *)",
+      "Bash(cd *)",
+      "Bash(echo *)",
+      "Bash(git status)",
+      "Bash(git diff *)",
+      "Bash(git log *)",
+      "Bash(git status *)",
+      "Bash(head *)",
+      "Bash(git add *)",
+      "Bash(git commit *)",
+      "Bash(git push *)"
     ]
   },
   "$version": 4
