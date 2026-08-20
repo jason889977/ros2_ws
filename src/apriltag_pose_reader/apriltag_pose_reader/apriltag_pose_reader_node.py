@@ -167,8 +167,8 @@ class AprilTagPoseReader(Node):
         # Buffer: 存储所有收到的坐标变换，形成一个变换树
         self._tf_buffer = Buffer()
         # TransformListener: 自动订阅 /tf 话题，将收到的变换存入 Buffer
-        # spin_thread=True 表示在独立线程中处理 TF 回调，不阻塞主线程
-        self._tf_listener = TransformListener(self._tf_buffer, self, spin_thread=True)
+        # spin_thread=False: TF 回调由 MultiThreadedExecutor 调度，避免双线程竞争共享状态
+        self._tf_listener = TransformListener(self._tf_buffer, self, spin_thread=False)
 
         # ------------------------------------------------------------------
         # 内部状态变量

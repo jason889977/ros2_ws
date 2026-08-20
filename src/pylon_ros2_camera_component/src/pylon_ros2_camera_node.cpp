@@ -3048,6 +3048,7 @@ void PylonROS2CameraNode::setWhiteBalanceCallback(const std::shared_ptr<SetWhite
   } 
   catch (...)
   {
+    RCLCPP_ERROR(LOGGER, "An unknown exception occurred in service callback");
     response->success = false;
   }
 }
@@ -3489,6 +3490,7 @@ void PylonROS2CameraNode::setGrabTimeoutCallback(const std::shared_ptr<SetIntege
     response->success = true;
   } catch (...)
   {
+    RCLCPP_ERROR(LOGGER, "An unknown exception occurred in setGrabTimeoutCallback");
     response->success = false;
   }
   this->grabbingStarting(); // start grabbing is required to set the new trigger timeout
@@ -3505,6 +3507,7 @@ void PylonROS2CameraNode::setTriggerTimeoutCallback(const std::shared_ptr<SetInt
   } 
   catch (...)
   {
+    RCLCPP_ERROR(LOGGER, "An unknown exception occurred in service callback");
     response->success = false;
   }
   this->grabbingStarting(); // start grabbing is required to set the new trigger timeout
@@ -4680,6 +4683,13 @@ void PylonROS2CameraNode::handleGrabRawImagesActionGoalAccepted(const std::share
 
 void PylonROS2CameraNode::executeGrabRawImagesAction(const std::shared_ptr<GrabImagesGoalHandle> goal_handle)
 {
+  if (!this->pylon_camera_)
+  {
+    auto result = std::make_shared<GrabImagesAction::Result>();
+    result->success = false;
+    goal_handle->succeed(result);
+    return;
+  }
   auto result = this->grabRawImages(goal_handle);
   goal_handle->succeed(result);
 }
@@ -4711,6 +4721,13 @@ void PylonROS2CameraNode::executeGrabRectImagesAction(const std::shared_ptr<Grab
   auto result = std::make_shared<GrabImagesAction::Result>();
   auto feedback = std::make_shared<GrabImagesAction::Feedback>();
 
+  if (!this->pylon_camera_)
+  {
+    result->success = false;
+    goal_handle->succeed(result);
+    return;
+  }
+
   // stop it here if the connected cam is a blaze
   // should not happen as the action server is only setup if the connected cam is not a blaze
   if (this->pylon_camera_->isBlaze())
@@ -4741,6 +4758,13 @@ void PylonROS2CameraNode::executeGrabRectImagesAction(const std::shared_ptr<Grab
       const int src_bit_depth = sensor_msgs::image_encodings::bitDepth(result->images[i].encoding);
       const std::string debayed_encoding = (src_bit_depth == 8) ? "bgr8" : "bgr16";
       cv_bridge::CvImagePtr cv_img_raw = cv_bridge::toCvCopy(result->images[i], debayed_encoding);
+      if (!cv_img_raw)
+      {
+        RCLCPP_ERROR(LOGGER, "cv_bridge::toCvCopy failed for image %zu", i);
+        result->success = false;
+        goal_handle->succeed(result);
+        return;
+      }
       this->pinhole_model_->fromCameraInfo(this->camera_info_manager_->getCameraInfo());
       cv_bridge::CvImage cv_bridge_img_rect;
       cv_bridge_img_rect.header = result->images[i].header;
@@ -4779,6 +4803,13 @@ void PylonROS2CameraNode::executeGrabBlazeDataAction(const std::shared_ptr<GrabB
   const auto goal = goal_handle->get_goal();
   auto result = std::make_shared<GrabBlazeDataAction::Result>();
   auto feedback = std::make_shared<GrabBlazeDataAction::Feedback>();
+
+  if (!this->pylon_camera_)
+  {
+    result->success = false;
+    goal_handle->succeed(result);
+    return;
+  }
 
   // stop it here if the connected cam is not a blaze
   // should not happen as the action server is setup if the connected cam is a blaze
@@ -5082,7 +5113,7 @@ float PylonROS2CameraNode::calcCurrentBrightness()
   else
   {
     // The mean brightness is calculated using all pixels and all channels
-    sum = std::accumulate(this->img_raw_msg_.data.begin(), this->img_raw_msg_.data.end(), 0);
+    sum = std::accumulate(this->img_raw_msg_.data.begin(), this->img_raw_msg_.data.end(), 0LL);
     if (this->img_raw_msg_.data.size() > 0)
     {
       sum /= static_cast<float>(this->img_raw_msg_.data.size());
@@ -5144,6 +5175,12 @@ std::shared_ptr<GrabImagesAction::Result> PylonROS2CameraNode::grabRawImages(con
   const auto goal = goal_handle->get_goal();
   auto result = std::make_shared<GrabImagesAction::Result>();
   auto feedback = std::make_shared<GrabImagesAction::Feedback>();
+
+  if (!this->pylon_camera_)
+  {
+    result->success = false;
+    return result;
+  }
 
   // stop it here if the connected cam is a blaze
   if (this->pylon_camera_->isBlaze())
