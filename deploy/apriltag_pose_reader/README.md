@@ -25,5 +25,5 @@ docker inspect --format '{{json .State.Health}}' apriltag_pose_reader
 
 - 需要上游相机节点提供图像和 camera_info。
 - 默认依赖 Basler 相机：`/my_camera/pylon_ros2_camera_node/image_raw` 与 `/my_camera/pylon_ros2_camera_node/camera_info`。
-- 若使用其他相机源，需调整 `IMAGE_TOPIC` / `CAMERA_INFO_TOPIC` 参数。
+- Compose 会将 `IMAGE_TOPIC`、`CAMERA_INFO_TOPIC`、`START_DETECTOR`、`TAG_FAMILY`、`TAG_ID`、`LOOKUP_PARENT_FRAME`、`LOOKUP_RATE_HZ` 作为 `apriltag_pose_reader.launch.py` 的默认参数传入。
 - 默认启动 `apriltag_ros` 检测节点，输出 `/detections` 与 `/tf`。

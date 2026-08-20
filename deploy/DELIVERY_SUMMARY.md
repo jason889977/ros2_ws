@@ -134,10 +134,14 @@ docker exec keyence_sr_wrapper /opt/ros2_ws/deploy/keyence_sr_wrapper/smoke_test
 | `ENABLE_QRCODE` | `true` | 启用二维码检测链 |
 | `ENABLE_KEYENCE` | `true` | 启用 Keyence 扫码节点 |
 | `CAMERA_ID_2` | _(空)_ | 第二台相机 ID，非空时启动双 pipeline |
-| `CAMERA_CONFIG_2` | _(同 cam1)_ | 第二台相机配置文件路径 |
+| `CAMERA_CONFIG_2` | _(无默认值)_ | `CAMERA_ID_2` 非空时必填，且必须不同于 `CAMERA_CONFIG_FILE` |
 | `ENABLE_APRILTAG_2` | `true` | 第二台相机 AprilTag 开关 |
 | `ENABLE_QRCODE_2` | `true` | 第二台相机 QR 开关 |
 | `ENABLE_KEYENCE_2` | `true` | 第二台相机 Keyence 开关 |
+
+双相机模式下，`CAMERA_ID_2` 必须不同于 `CAMERA_ID`。统一 pipeline 的
+`SCANNER_PORT` 必须为 $1$ 至 $65535$ 的整数，`RECONNECT_INTERVAL_S` 必须为有限且不小于 $0$ 的数值。
+独立 QR、AprilTag、Keyence 容器会将 Compose 中对应的环境变量作为 launch 默认参数传入。
 
 ### 资源限制参数
 

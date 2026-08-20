@@ -27,3 +27,4 @@ docker inspect --format '{{json .State.Health}}' keyence_sr_wrapper
 - 默认 IP：`172.31.0.91`
 - 默认端口：`9004`
 - 该模块通过 TCP 连接与扫码器通信，不依赖串口设备。
+- Compose 会将 `SCANNER_IP` 与 `SCANNER_PORT` 作为 `keyence_sr_node.launch.py` 的默认参数传入；修改 `.env` 后使用 `up -d --force-recreate` 重建容器。

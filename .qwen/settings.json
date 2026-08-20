@@ -28,7 +28,8 @@
       "Bash(ssh-keygen *)",
       "Bash(ssh *)",
       "Bash(docker *)",
-      "Bash(ping *)"
+      "Bash(ping *)",
+      "Bash(grep *)"
     ]
   },
   "$version": 4

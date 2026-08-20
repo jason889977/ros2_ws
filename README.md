@@ -142,18 +142,22 @@ docker exec basler_camera /opt/ros2_ws/deploy/basler_camera/healthcheck.sh
 ```bash
 # 相机 1：只跑 QR
 CAMERA_ID=cam1
+CAMERA_CONFIG_FILE=/opt/ros2_ws/deploy/basler_camera/config/cam1.yaml
 ENABLE_QRCODE=true
 ENABLE_APRILTAG=false
 ENABLE_KEYENCE=false
 
 # 相机 2：只跑 AprilTag
 CAMERA_ID_2=cam2
-ENABLE_QRCODE=false
-ENABLE_APRILTAG=true
-ENABLE_KEYENCE=false
+CAMERA_CONFIG_2=/opt/ros2_ws/deploy/basler_camera/config/cam2.yaml
+ENABLE_QRCODE_2=false
+ENABLE_APRILTAG_2=true
+ENABLE_KEYENCE_2=false
 ```
 
 然后正常 `docker compose up -d`，entrypoint 会自动检测 `CAMERA_ID_2` 并启动第二条 pipeline。
+双相机模式下，`CAMERA_CONFIG_2` 为必填项，且 `CAMERA_ID_2` 必须不同于
+`CAMERA_ID`，`CAMERA_CONFIG_2` 必须不同于 `CAMERA_CONFIG_FILE`。
 
 ### 方式三：手动 launch（开发调试用）
 
@@ -214,7 +218,12 @@ ros2 topic echo /diagnostics --once
 # - "AprilTag Status": 检测计数 + 当前跟踪的标签帧
 ```
 
-相机健康判据：`/{CAMERA_ID}/pylon_ros2_camera_node/camera_info` 话题类型正确且消息可达。
+健康检查要求每路相机的 `/{CAMERA_ID}/pylon_ros2_camera_node/camera_info`
+话题类型正确且消息可达；同时，每路 `ENABLE_*` 为 `true` 的模块节点必须存在。
+禁用的模块不纳入健康检查。
+
+统一 pipeline 启动时，`scanner_port`/`SCANNER_PORT` 必须是 $1$ 至 $65535$ 的整数，
+`reconnect_interval_s`/`RECONNECT_INTERVAL_S` 必须是有限且不小于 $0$ 的数值。
 
 ## 文档入口
 

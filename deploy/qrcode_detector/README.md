@@ -25,5 +25,6 @@ docker inspect --format '{{json .State.Health}}' qrcode_detector
 
 - 宿主机或上游模块已提供图像输入话题。
 - 默认依赖 Basler 相机节点输出 `/my_camera/pylon_ros2_camera_node/image_raw`。
-- 若图像源来自其他相机，可通过 `IMAGE_TOPIC` 参数或 compose 环境变量覆盖。
+- 运行依赖 `python3-opencv` 与 `python3-numpy`。
+- `IMAGE_TOPIC`、`MODEL_DIR`、`PREFER_WECHAT_QR` 会作为 `qrcode_detector.launch.py` 的默认参数传入；若图像源来自其他相机，可通过 `.env` 覆盖 `IMAGE_TOPIC`。
 - WeChatQR 模型文件在 `share/qrcode_detector/models/` 中，若未提供则自动回退到 OpenCV 内置 QR 检测器。
