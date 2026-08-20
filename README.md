@@ -1,6 +1,26 @@
 # ROS2 Basler Camera + QR Detector Workspace
 
-这是一个基于 ROS 2 Humble 的 Basler 相机与二维码识别工作区，包含相机驱动、二维码检测节点、运行脚本以及交接文档。
+这是一个基于 ROS 2 Humble 的工业视觉工作区，当前生产基线为统一容器运行模式。
+
+## 当前项目状况（2026-08-20）
+
+- 标准运行模式：单容器 `basler_camera` 统一运行 Basler 相机、AprilTag、二维码和 Keyence 扫码链路。
+- 统一启动入口：`industrial_vision_bringup/vision_pipeline.launch.py`。
+- 部署形态：`deploy/basler_camera/docker-compose.yml` 使用 `network_mode: host`，默认镜像 `basler_camera_20260819_v2.0`。
+- 当前相机基线：`startup_user_set=Default`，`binning 2x2`，图像规格 `Mono8 1294x970`。
+- 关键输出接口：
+  - `/wechat_qr_node/decoded_info`（二维码识别结果）
+  - `/apriltag/pose`、`/apriltag/transform`（AprilTag 位姿/变换）
+  - `/scanner/barcode`（Keyence 扫码结果）
+- 容器健康判据：以 `/my_camera/pylon_ros2_camera_node/camera_info` 的类型与消息可达为准（healthcheck 已落地）。
+- 验收口径：统一容器主流程以 `/detections`、`/apriltag/pose`、`/wechat_qr_node/decoded_info` 可用为通过标准。
+- 兼容说明：`scripts/camera_tcp_bridge.py` 保留用于兼容调试，不是统一容器主路径。
+
+详见：
+- `项目启动运行指南/工控机ROS2集成与调用超详细指南.md`
+- `handover_ros2_integration_2026-08-07/00-交接总览.md`
+- `handover_ros2_integration_2026-08-07/02-启动与运行SOP.md`
+- `handover_ros2_integration_2026-08-07/03-测试方法与验收标准.md`
 
 ## 目录说明
 
