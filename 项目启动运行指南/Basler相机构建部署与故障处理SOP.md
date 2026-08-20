@@ -277,10 +277,10 @@ sudo -n docker exec basler_camera sh -lc '. /opt/ros/humble/setup.sh && . /opt/r
 ```text
 /my_camera/pylon_ros2_camera_node/camera_info
 /my_camera/pylon_ros2_camera_node/image_raw
-/detections
-/apriltag/pose
-/wechat_qr_node/decoded_info
-/scanner/barcode
+/my_camera/detections
+/my_camera/apriltag/pose
+/my_camera/qr/decoded_info
+/my_camera/scanner/barcode
 ```
 
 消息验证：

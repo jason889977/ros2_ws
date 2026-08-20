@@ -59,18 +59,20 @@
 
 ### 3.1 视觉结果输出（你们最常用）
 
+所有输出话题按 `camera_id` 命名空间隔离（默认 `my_camera`）：
+
 1) 二维码文本：
-- Topic：`/wechat_qr_node/decoded_info`
+- Topic：`/my_camera/qr/decoded_info`
 - 类型：`std_msgs/msg/String`
 - 语义：二维码内容字符串
 
 2) AprilTag 位姿：
-- Topic：`/apriltag/pose`
+- Topic：`/my_camera/apriltag/pose`
 - 类型：`geometry_msgs/msg/PoseStamped`
 - 语义：目标 Tag 在某坐标系下的位置姿态（常用于引导机器人）
 
 3) AprilTag 变换：
-- Topic：`/apriltag/transform`
+- Topic：`/my_camera/apriltag/transform`
 - 类型：`geometry_msgs/msg/TransformStamped`
 - 语义：父子坐标系之间变换，可直接接 TF 逻辑
 
@@ -84,13 +86,15 @@
 
 ### 3.2 设备触发输入（机器人可调用）
 
+所有输出话题按 `camera_id` 命名空间隔离（默认 `my_camera`）：
+
 1) Keyence 触发扫码服务：
-- Service：`/scanner/trigger`
+- Service：`/my_camera/scanner/trigger`
 - 类型：`std_srvs/srv/Trigger`
 - 作用：机器人动作到位后主动触发一次扫码
 
 2) Keyence 扫码结果输出：
-- Topic：`/scanner/barcode`
+- Topic：`/my_camera/scanner/barcode`
 - 类型：`std_msgs/msg/String`
 
 ### 3.3 触发模式说明（非常重要，避免误用）
@@ -98,16 +102,16 @@
 1) QR 二维码链路：持续读取模式
 - 节点持续订阅图像话题，来一帧处理一帧。
 - 默认不是“调用一次就拍一张”的服务模式。
-- 结果持续发布到 `/wechat_qr_node/decoded_info`（相同结果会做短时间去重抑制）。
+- 结果持续发布到 `/my_camera/qr/decoded_info`（相同结果会做短时间去重抑制）。
 
 2) AprilTag 链路：持续读取模式
-- `apriltag_ros` 持续处理图像并输出 `/detections`、`/tf`。
-- `apriltag_pose_reader` 持续消费这些数据并发布 `/apriltag/pose`、`/apriltag/transform`。
+- `apriltag_ros` 持续处理图像并输出 `/my_camera/detections`、`/tf`。
+- `apriltag_pose_reader` 持续消费这些数据并发布 `/my_camera/apriltag/pose`、`/my_camera/apriltag/transform`。
 - 默认不是单次触发拍照模式。
 
 3) Keyence 扫码链路：单次触发模式
-- 通过调用 `/scanner/trigger` 触发一次扫码。
-- 然后从 `/scanner/barcode` 读取本次结果。
+- 通过调用 `/my_camera/scanner/trigger` 触发一次扫码。
+- 然后从 `/my_camera/scanner/barcode` 读取本次结果。
 - 这是本项目里典型的“请求-应答/触发”链路。
 
 ---
@@ -209,31 +213,31 @@ ros2 node list | grep -E 'pylon_ros2_camera_node|wechat_qr_node|apriltag_pose_re
 ### 7.2 看关键话题是否存在
 
 ```bash
-ros2 topic list | grep -E '/wechat_qr_node/decoded_info|/apriltag/pose|/apriltag/transform|/scanner/barcode|image_raw|camera_info'
+ros2 topic list | grep -E '/my_camera/qr/decoded_info|/my_camera/apriltag/pose|/my_camera/apriltag/transform|/my_camera/scanner/barcode|image_raw|camera_info'
 ```
 
 ### 7.3 验证二维码输出
 
 ```bash
-ros2 topic echo /wechat_qr_node/decoded_info --once
+ros2 topic echo /my_camera/qr/decoded_info --once
 ```
 
 ### 7.4 验证 AprilTag 输出
 
 ```bash
-ros2 topic echo /apriltag/pose --once
+ros2 topic echo /my_camera/apriltag/pose --once
 ```
 
 ### 7.5 验证 Keyence 触发调用
 
 ```bash
-ros2 service call /scanner/trigger std_srvs/srv/Trigger {}
+ros2 service call /my_camera/scanner/trigger std_srvs/srv/Trigger {}
 ```
 
 并在另一个终端看：
 
 ```bash
-ros2 topic echo /scanner/barcode
+ros2 topic echo /my_camera/scanner/barcode
 ```
 
 ---
@@ -248,8 +252,8 @@ ros2 topic echo /scanner/barcode
 - 机器人只需要二维码字符串或 AprilTag 位姿，不需要改视觉程序。
 
 机器人侧做法：
-1. 订阅 `/wechat_qr_node/decoded_info` 拿字符串。
-2. 订阅 `/apriltag/pose` 拿位姿。
+1. 订阅 `/my_camera/qr/decoded_info` 拿字符串。
+2. 订阅 `/my_camera/apriltag/pose` 拿位姿。
 3. 收到数据后做动作规划。
 
 优点：耦合低、上线快。
@@ -261,8 +265,8 @@ ros2 topic echo /scanner/barcode
 - 说明：这里是 Keyence 的单次触发逻辑，不是 QR/AprilTag 的处理方式。
 
 机器人侧做法：
-1. 先调用 `/scanner/trigger`。
-2. 等待 `/scanner/barcode` 返回一条结果。
+1. 先调用 `/my_camera/scanner/trigger`。
+2. 等待 `/my_camera/scanner/barcode` 返回一条结果。
 3. 结果超时则重试或报警。
 
 建议超时：
@@ -274,7 +278,7 @@ ros2 topic echo /scanner/barcode
 - 机器人根据 AprilTag 估计位姿进行抓取。
 
 机器人侧做法：
-1. 订阅 `/apriltag/transform` 或 `/apriltag/pose`。
+1. 订阅 `/my_camera/apriltag/transform` 或 `/my_camera/apriltag/pose`。
 2. 把姿态转换到机器人基坐标系（若需要）。
 3. 做安全过滤（位姿跳变、超出工作空间直接丢弃）。
 
@@ -297,7 +301,7 @@ class QrListener(Node):
         super().__init__('qr_listener')
         self.sub = self.create_subscription(
             String,
-            '/wechat_qr_node/decoded_info',
+            '/my_camera/qr/decoded_info',
             self.cb,
             10,
         )
@@ -327,11 +331,11 @@ from std_srvs.srv import Trigger
 class ScannerTrigger(Node):
     def __init__(self):
         super().__init__('scanner_trigger_client')
-        self.cli = self.create_client(Trigger, '/scanner/trigger')
+        self.cli = self.create_client(Trigger, '/my_camera/scanner/trigger')
 
     def run(self):
         if not self.cli.wait_for_service(timeout_sec=3.0):
-            self.get_logger().error('service /scanner/trigger not available')
+            self.get_logger().error('service /my_camera/scanner/trigger not available')
             return
         req = Trigger.Request()
         future = self.cli.call_async(req)
@@ -365,7 +369,7 @@ class TagPoseListener : public rclcpp::Node {
 public:
   TagPoseListener() : Node("tag_pose_listener") {
     sub_ = this->create_subscription<geometry_msgs::msg::PoseStamped>(
-      "/apriltag/pose", 10,
+      "/my_camera/apriltag/pose", 10,
       [this](const geometry_msgs::msg::PoseStamped::SharedPtr msg) {
         RCLCPP_INFO(this->get_logger(),
                     "Tag Pose: frame=%s, x=%.3f y=%.3f z=%.3f",
@@ -424,7 +428,7 @@ int main(int argc, char ** argv) {
 docker exec basler_camera /opt/ros2_ws/deploy/basler_camera/healthcheck.sh
 ```
 
-## 11.2 看不到 `/wechat_qr_node/decoded_info`
+## 11.2 看不到 `/my_camera/qr/decoded_info`
 
 1. 先确认有图像输入：
 
@@ -440,13 +444,13 @@ ros2 node list | grep wechat_qr_node
 
 3. 现场二维码是否清晰、尺寸是否太小。
 
-## 11.3 看不到 `/apriltag/pose`
+## 11.3 看不到 `/my_camera/apriltag/pose`
 
 1. 检查标签 family 与 ID 是否匹配（当前验证：`36h11`, `id=3`）。
-2. 先看 `/detections` 是否有数据。
+2. 先看 `/my_camera/detections` 是否有数据。
 3. 再看 `/tf` 是否有对应 tag 变换。
 
-## 11.4 调用 `/scanner/trigger` 失败
+## 11.4 调用 `/my_camera/scanner/trigger` 失败
 
 1. 检查扫码器 IP/端口是否能 ping/连通。
 2. 检查 `SCANNER_IP`、`SCANNER_PORT`。
@@ -461,7 +465,7 @@ cd /home/ubuntu/ros2_ws
 cp deploy/basler_camera/.env.example deploy/basler_camera/.env
 docker compose --env-file deploy/basler_camera/.env -f deploy/basler_camera/docker-compose.yml up -d
 docker inspect --format '{{.State.Status}} {{.State.Health.Status}}' basler_camera
-ros2 topic list | grep -E '/wechat_qr_node/decoded_info|/apriltag/pose|/scanner/barcode'
+ros2 topic list | grep -E '/my_camera/qr/decoded_info|/my_camera/apriltag/pose|/my_camera/scanner/barcode'
 ```
 
 如果第 4 条是 `running healthy` 且第 5 条能看到三个关键话题，基本就表示集成成功。
@@ -492,11 +496,11 @@ ros2 topic list | grep -E '/wechat_qr_node/decoded_info|/apriltag/pose|/scanner/
 
 建议在机器人项目里定义统一约定：
 - 输入：
-  - `/apriltag/pose`
-  - `/wechat_qr_node/decoded_info`
-  - `/scanner/barcode`
+  - `/my_camera/apriltag/pose`
+  - `/my_camera/qr/decoded_info`
+  - `/my_camera/scanner/barcode`
 - 输出调用：
-  - `/scanner/trigger`
+  - `/my_camera/scanner/trigger`
 
 这样后续即使视觉算法升级，只要接口不变，机器人侧代码基本不用改。
 
