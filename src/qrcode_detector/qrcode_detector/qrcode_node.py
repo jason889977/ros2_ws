@@ -70,7 +70,7 @@ from rclpy.node import Node
 # Node 是 ROS 2 节点的基类。
 # 节点是 ROS 2 中的最小计算单元，拥有自己的参数、话题、服务等。
 
-from sensor_msgs.msg import Image, CameraInfo
+from sensor_msgs.msg import Image, CameraInfo, CompressedImage
 # sensor_msgs/Image 是 ROS 2 中图像消息的标准类型。
 # 包含字段：
 #   header   — 时间戳 + 坐标系
@@ -78,6 +78,7 @@ from sensor_msgs.msg import Image, CameraInfo
 #   width    — 图像宽度（像素）
 #   encoding — 像素编码（如 "bgr8", "mono8", "rgb8"）
 #   data     — 原始像素数据（一维字节数组）
+# sensor_msgs/CompressedImage 是压缩图像消息（JPEG/PNG），带宽更低。
 # sensor_msgs/CameraInfo 包含相机内参矩阵和畸变系数。
 
 from std_msgs.msg import String
@@ -160,6 +161,17 @@ class WeChatQRNode(Node):
 
         self.declare_parameter('deduplicate_window_s', 0.5)
 
+        self.declare_parameter('min_detect_interval_s', 0.2)
+        # 两次检测之间的最小间隔（秒）。
+        # 默认 0.2s 即最高 5Hz 检测频率。工业场景中二维码不会每帧变化，
+        # 降低检测频率可显著减少 CPU 占用。设为 0 表示不限制（每帧都检测）。
+
+        self.declare_parameter('use_compressed', False)
+        # 是否订阅压缩图像话题（CompressedImage）而非原始图像（Image）。
+        # 启用后话题名自动追加 /compressed 后缀。
+        # 压缩传输可显著降低内存拷贝和 DDS 带宽占用，适合 GigE 相机场景。
+        # 需要上游有 image_transport republish 节点提供压缩流。
+
         # ==================================================================
         # 读取参数值到局部变量
         # ==================================================================
@@ -175,7 +187,14 @@ class WeChatQRNode(Node):
         self._deduplicate_window_s = float(
             self.get_parameter('deduplicate_window_s').value
         )
+        self._min_detect_interval_s = float(
+            self.get_parameter('min_detect_interval_s').value
+        )
+        self._use_compressed = bool(
+            self.get_parameter('use_compressed').value
+        )
         self._last_published_at = {}
+        self._last_detect_time = 0.0
 
         # 相机内参（从 CameraInfo 消息中填充）
         self._camera_matrix = None   # 3x3 numpy 数组
@@ -222,13 +241,25 @@ class WeChatQRNode(Node):
         # 创建订阅者（Subscriber）
         # ==================================================================
         # create_subscription(消息类型, 话题名, 回调函数, 队列大小)
-        # 每当相机发布新图像时，self.image_callback 会被自动调用
-        self.subscription = self.create_subscription(
-            Image,          # 消息类型：ROS 标准图像消息
-            image_topic,    # 话题名（从参数读取）
-            self.image_callback,  # 回调函数：收到图像时执行
-            queue_size,     # 队列大小（从参数读取）
-        )
+        # 每当相机发布新图像时，回调函数会被自动调用
+        if self._use_compressed:
+            compressed_topic = image_topic + '/compressed'
+            self.subscription = self.create_subscription(
+                CompressedImage,
+                compressed_topic,
+                self.compressed_image_callback,
+                queue_size,
+            )
+            self.get_logger().info(
+                f'已启用压缩图像订阅: {compressed_topic}'
+            )
+        else:
+            self.subscription = self.create_subscription(
+                Image,
+                image_topic,
+                self.image_callback,
+                queue_size,
+            )
 
         # ==================================================================
         # CameraInfo 订阅 + 位姿发布（use_camera_info 功能）
@@ -519,6 +550,46 @@ class WeChatQRNode(Node):
         self._last_published_at[info] = now
         return previous is None or now - previous >= self._deduplicate_window_s
 
+    def compressed_image_callback(self, msg: CompressedImage):
+        """压缩图像回调：从 CompressedImage 解码后复用检测逻辑。"""
+        if self._min_detect_interval_s > 0.0:
+            now = time.monotonic()
+            if now - self._last_detect_time < self._min_detect_interval_s:
+                return
+            self._last_detect_time = now
+
+        try:
+            np_arr = np.frombuffer(msg.data, np.uint8)
+            cv_image = cv.imdecode(np_arr, cv.IMREAD_COLOR)
+            if cv_image is None:
+                self.get_logger().error('压缩图像解码失败')
+                return
+        except Exception as e:
+            self.get_logger().error(f'压缩图像解码异常: {e}')
+            return
+
+        try:
+            decoded_info, points_list = self._decode_qr(cv_image)
+        except Exception as e:
+            self.get_logger().error(f'二维码检测失败: {e}')
+            return
+
+        if decoded_info:
+            for i, info in enumerate(decoded_info):
+                if not self._should_publish(info):
+                    continue
+                self.get_logger().info(f'✅ 识别到二维码: {info}')
+                str_msg = String()
+                str_msg.data = info
+                self.result_pub.publish(str_msg)
+
+                if self._pose_pub is not None and i < len(points_list):
+                    corners = points_list[i]
+                    if corners is not None and corners.shape == (4, 2):
+                        pose = self._estimate_pose(corners, msg.header)
+                        if pose is not None:
+                            self._pose_pub.publish(pose)
+
     def image_callback(self, msg: Image):
         """
         图像回调：每收到一帧相机图像时自动调用。
@@ -531,6 +602,13 @@ class WeChatQRNode(Node):
         参数:
             msg: sensor_msgs/Image 消息，包含一帧相机图像
         """
+
+        # ---- 帧率控制：跳过过于密集的检测请求 ----
+        if self._min_detect_interval_s > 0.0:
+            now = time.monotonic()
+            if now - self._last_detect_time < self._min_detect_interval_s:
+                return
+            self._last_detect_time = now
 
         # ---- 步骤 1：ROS Image → OpenCV numpy 数组 ----
         # imgmsg_to_cv2() 将序列化的 ROS 图像消息解码为内存中的像素矩阵

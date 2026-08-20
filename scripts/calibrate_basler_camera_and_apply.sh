@@ -7,7 +7,7 @@ set -euo pipefail
 # 2) Launch cameracalibrator GUI and complete CALIBRATE -> SAVE.
 # 3) Copy generated calibration YAML into package config path used by camera profiles.
 
-WORKSPACE_DIR="/home/ubuntu/ros2_ws"
+WORKSPACE_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 ROS_SETUP="/opt/ros/humble/setup.bash"
 WS_SETUP="$WORKSPACE_DIR/install/setup.bash"
 

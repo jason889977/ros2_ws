@@ -35,6 +35,8 @@ import time
 import rclpy
 # rclpy 是 ROS 2 的 Python 客户端库，提供节点创建、消息发布/订阅等核心功能
 
+from diagnostic_updater import DiagnosticStatusWrapper, Updater
+from rclpy.executors import ExternalShutdownException
 from rclpy.node import Node
 # Node 是 ROS 2 节点的基类，所有自定义节点都需要继承它
 
@@ -234,6 +236,11 @@ class AprilTagPoseReader(Node):
         # 健康日志定时器：定期打印节点运行状态
         if self._health_log_interval_s > 0.0:
             self.create_timer(self._health_log_interval_s, self._log_health)
+
+        # ---- Diagnostics ----
+        self._diag_updater = Updater(self)
+        self._diag_updater.setHardwareID('apriltag')
+        self._diag_updater.addFunction('AprilTag Status', self._diag_status)
 
     # ======================================================================
     # 辅助方法
@@ -476,6 +483,18 @@ class AprilTagPoseReader(Node):
             f'candidate_frames={frames}'
         )
 
+    def _diag_status(self, stat: DiagnosticStatusWrapper) -> DiagnosticStatusWrapper:
+        """Diagnostic task: report AprilTag detection and transform statistics."""
+        if self._detections_seen > 0:
+            stat.summary(0, 'Detecting tags')
+        else:
+            stat.summary(1, 'No detections yet')
+        frames = ','.join(sorted(self._candidate_frames())) or '<none>'
+        stat.add('detections_seen', str(self._detections_seen))
+        stat.add('transforms_published', str(self._transforms_published))
+        stat.add('candidate_frames', frames)
+        return stat
+
 
 # ============================================================================
 # 节点入口函数
@@ -497,12 +516,12 @@ def main(args=None) -> None:
     node = AprilTagPoseReader()
     try:
         rclpy.spin(node)
-    except KeyboardInterrupt:
-        # 用户按 Ctrl+C 时优雅退出
+    except (KeyboardInterrupt, ExternalShutdownException):
         pass
     finally:
         node.destroy_node()
-        rclpy.shutdown()
+        if rclpy.ok():
+            rclpy.shutdown()
 
 
 # Python 标准入口点：当直接运行此文件时（而非被 import 时）执行 main()

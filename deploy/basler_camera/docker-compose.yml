@@ -7,6 +7,7 @@ services:
     environment:
       ROS_DOMAIN_ID: ${ROS_DOMAIN_ID:-0}
       RMW_IMPLEMENTATION: ${RMW_IMPLEMENTATION:-rmw_fastrtps_cpp}
+      # Camera 1
       CAMERA_ID: ${CAMERA_ID:-my_camera}
       CAMERA_CONFIG_FILE: ${CAMERA_CONFIG_FILE:-/opt/ros2_ws/deploy/basler_camera/config/aca2500_106611_18.yaml}
       CAMERA_MTU_SIZE: ${CAMERA_MTU_SIZE:-1500}
@@ -15,6 +16,19 @@ services:
       SCANNER_IP: ${SCANNER_IP:-172.31.0.91}
       SCANNER_PORT: ${SCANNER_PORT:-9004}
       RECONNECT_INTERVAL_S: ${RECONNECT_INTERVAL_S:-5.0}
+      # Per-module enable flags (camera 1)
+      ENABLE_APRILTAG: ${ENABLE_APRILTAG:-true}
+      ENABLE_QRCODE: ${ENABLE_QRCODE:-true}
+      ENABLE_KEYENCE: ${ENABLE_KEYENCE:-true}
+      # Camera 2 (leave CAMERA_ID_2 empty to disable dual-camera)
+      CAMERA_ID_2: ${CAMERA_ID_2:-}
+      CAMERA_CONFIG_2: ${CAMERA_CONFIG_2:-}
+      CAMERA_STARTUP_USER_SET_2: ${CAMERA_STARTUP_USER_SET_2:-Default}
+      SCANNER_IP_2: ${SCANNER_IP_2:-}
+      SCANNER_PORT_2: ${SCANNER_PORT_2:-}
+      ENABLE_APRILTAG_2: ${ENABLE_APRILTAG_2:-true}
+      ENABLE_QRCODE_2: ${ENABLE_QRCODE_2:-true}
+      ENABLE_KEYENCE_2: ${ENABLE_KEYENCE_2:-true}
     command: ["ros2", "launch", "industrial_vision_bringup", "vision_pipeline.launch.py"]
     devices: []
     volumes:

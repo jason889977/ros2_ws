@@ -1,0 +1,49 @@
+name: Build & Test
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  build-and-test:
+    runs-on: ubuntu-22.04
+    container: osrf/ros:humble-ros-base-jammy
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Python test deps
+        run: |
+          apt-get update
+          apt-get install -y python3-pytest python3-opencv python3-numpy \
+            ros-humble-cv-bridge ros-humble-sensor-msgs ros-humble-std-msgs \
+            ros-humble-std-srvs ros-humble-tf2-ros ros-humble-tf2-msgs \
+            ros-humble-geometry-msgs ros-humble-apriltag-msgs \
+            ros-humble-rclpy ros-humble-ament-copyright \
+            ros-humble-ament-flake8 ros-humble-ament-pep257
+
+      - name: Build workspace
+        run: |
+          . /opt/ros/humble/setup.sh
+          colcon build --symlink-install --packages-select \
+            apriltag_pose_reader keyence_sr_wrapper qrcode_detector \
+            industrial_vision_bringup
+
+      - name: Run unit tests
+        run: |
+          . /opt/ros/humble/setup.sh
+          . install/setup.bash
+          python3 -m pytest \
+            src/keyence_sr_wrapper/test/ \
+            src/apriltag_pose_reader/test/ \
+            src/qrcode_detector/test/test_qr_dedup.py \
+            -v
+
+      - name: Lint Python packages
+        run: |
+          . /opt/ros/humble/setup.sh
+          colcon test --packages-select \
+            apriltag_pose_reader keyence_sr_wrapper qrcode_detector \
+            --event-handlers console_cohesion+
+          colcon test-result --verbose

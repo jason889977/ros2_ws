@@ -11,7 +11,7 @@ RUN apt-get update && apt-get install -y \
     ros-humble-std-srvs \
     && rm -rf /var/lib/apt/lists/*
 
-COPY . /opt/ros2_ws
+COPY src/keyence_sr_wrapper/ src/keyence_sr_wrapper/
 
 RUN /bin/bash -lc 'source /opt/ros/humble/setup.bash && colcon build --packages-select keyence_sr_wrapper --symlink-install --cmake-args -DCMAKE_BUILD_TYPE=Release'
 

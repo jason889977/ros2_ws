@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-WS_DIR="/home/ubuntu/ros2_ws"
+WS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 RVIZ_CONFIG="$WS_DIR/handover_ros2_integration_2026-08-07/rviz/my_camera_image_raw.rviz"
 
 cd "$WS_DIR"

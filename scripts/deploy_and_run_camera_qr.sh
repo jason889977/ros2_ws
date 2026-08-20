@@ -6,7 +6,7 @@ set -euo pipefail
 #   reuse   - reuse an already running pylon camera node if found (default)
 #   restart - stop old camera processes first, then launch a fresh camera node
 
-WORKSPACE_DIR="/home/ubuntu/ros2_ws"
+WORKSPACE_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 ROS_SETUP="/opt/ros/humble/setup.bash"
 WS_SETUP="$WORKSPACE_DIR/install/setup.bash"
 CAMERA_MODE="${CAMERA_MODE:-reuse}"

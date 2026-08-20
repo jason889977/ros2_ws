@@ -16,7 +16,7 @@ RUN apt-get update && apt-get install -y \
     ros-humble-apriltag-msgs \
     && rm -rf /var/lib/apt/lists/*
 
-COPY . /opt/ros2_ws
+COPY src/apriltag_pose_reader/ src/apriltag_pose_reader/
 
 RUN /bin/bash -lc 'source /opt/ros/humble/setup.bash && colcon build --packages-select apriltag_pose_reader --symlink-install --cmake-args -DCMAKE_BUILD_TYPE=Release'
 

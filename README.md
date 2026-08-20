@@ -8,13 +8,14 @@
 - 统一启动入口：`industrial_vision_bringup/vision_pipeline.launch.py`。
 - 部署形态：`deploy/basler_camera/docker-compose.yml` 使用 `network_mode: host`，默认镜像 `basler_camera_20260819_v2.0`。
 - 当前相机基线：`startup_user_set=Default`，`binning 2x2`，图像规格 `Mono8 1294x970`。
-- 关键输出接口：
-  - `/wechat_qr_node/decoded_info`（二维码识别结果）
-  - `/apriltag/pose`、`/apriltag/transform`（AprilTag 位姿/变换）
-  - `/scanner/barcode`（Keyence 扫码结果）
-- 容器健康判据：以 `/my_camera/pylon_ros2_camera_node/camera_info` 的类型与消息可达为准（healthcheck 已落地）。
-- 验收口径：统一容器主流程以 `/detections`、`/apriltag/pose`、`/wechat_qr_node/decoded_info` 可用为通过标准。
-- 兼容说明：`scripts/camera_tcp_bridge.py` 保留用于兼容调试，不是统一容器主路径。
+- 关键输出接口（以 `camera_id=my_camera` 为例，所有输出按相机命名空间隔离）：
+  - `/{camera_id}/qr/decoded_info`（二维码识别结果）
+  - `/{camera_id}/apriltag/pose`、`/{camera_id}/apriltag/transform`（AprilTag 位姿/变换）
+  - `/{camera_id}/scanner/barcode`（Keyence 扫码结果）
+- 多相机支持：设置 `CAMERA_ID_2` 环境变量即可在同一容器内启动第二条独立 pipeline，每台相机可配置不同检测链路（`ENABLE_APRILTAG`/`ENABLE_QRCODE`/`ENABLE_KEYENCE`）。
+- 容器健康判据：以 `/{CAMERA_ID}/pylon_ros2_camera_node/camera_info` 的类型与消息可达为准（healthcheck 已落地）。
+- 验收口径：统一容器主流程以 `/{camera_id}/detections`、`/{camera_id}/apriltag/pose`、`/{camera_id}/qr/decoded_info` 可用为通过标准。
+- 兼容说明：统一容器模式为唯一生产路径，各模块独立容器配置保留但不再主动维护。
 
 详见：
 - `项目启动运行指南/工控机ROS2集成与调用超详细指南.md`
@@ -30,6 +31,67 @@
 - `src/apriltag_pose_reader`: AprilTag TF/姿态读取封装与 launch
 - `scripts`: 部署、迁移、RViz 启动等脚本
 - `handover_ros2_integration_2026-08-07`: 中文交接与运行 SOP
+
+## 系统架构
+
+```mermaid
+graph TB
+    subgraph Docker Container ["Docker Container (basler_camera)"]
+        subgraph ComponentContainer ["vision_container (C++ 零拷贝)"]
+            CAM["pylon_ros2_camera_node<br/>(Basler GigE 驱动)"]
+        end
+
+        subgraph DetectionChain ["检测链路 (按 enable_* 开关)"]
+            AT["apriltag_ros<br/>(AprilTag 检测)"]
+            ATR["apriltag_pose_reader<br/>(位姿解算)"]
+            QR["wechat_qr_node<br/>(二维码识别)"]
+            KEY["keyence_sr_node<br/>(Keyence 扫码)"]
+        end
+
+        REP["image_transport republish<br/>(raw → compressed)"]
+    end
+
+    CAM -- "/{cam}/image_raw<br/>(零拷贝 intra-process)" --> AT
+    CAM -- "/{cam}/camera_info" --> AT
+    CAM -- "/{cam}/image_raw" --> REP
+    REP -- "/{cam}/image_raw/compressed" --> QR
+    CAM -- "/{cam}/camera_info" --> QR
+
+    AT -- "/{cam}/detections" --> ATR
+    AT -- "/tf (tag frames)" --> ATR
+
+    CAM ==>|"GigE TCP/IP"| CAMERA["Basler 相机<br/>(acA2500-14GC)"]
+    KEY ==>|"TCP 9004"| SCANNER["Keyence SR 扫码器"]
+
+    subgraph OutputTopics ["输出话题 (按 camera_id 隔离)"]
+        T1["/{cam}/apriltag/pose"]
+        T2["/{cam}/apriltag/transform"]
+        T3["/{cam}/qr/decoded_info"]
+        T4["/{cam}/scanner/barcode"]
+    end
+
+    ATR --> T1
+    ATR --> T2
+    QR --> T3
+    KEY --> T4
+```
+
+### 多相机拓扑
+
+```mermaid
+graph LR
+    subgraph Container ["单容器"]
+        P1["Pipeline 1<br/>camera_id=cam1<br/>QR only"]
+        P2["Pipeline 2<br/>camera_id=cam2<br/>AprilTag only"]
+    end
+
+    CAM1["Basler #1"] --> P1
+    CAM2["Basler #2"] --> P2
+    KEY1["Keyence #1"] --> P1
+
+    P1 --> "/cam1/qr/decoded_info"
+    P2 --> "/cam2/apriltag/pose"
+```
 
 ## 环境要求
 

@@ -15,7 +15,7 @@ RUN apt-get update && apt-get install -y \
     ros-humble-rclpy \
     && rm -rf /var/lib/apt/lists/*
 
-COPY . /opt/ros2_ws
+COPY src/qrcode_detector/ src/qrcode_detector/
 
 RUN /bin/bash -lc 'source /opt/ros/humble/setup.bash && colcon build --packages-select qrcode_detector --symlink-install --cmake-args -DCMAKE_BUILD_TYPE=Release'
 

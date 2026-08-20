@@ -8,19 +8,19 @@
 
 ## 1. 模块列表
 
-| 模块 | 镜像 Tag | 目录 |
-| --- | --- | --- |
-| Basler Camera | `basler_camera_20260818_v1.0` | `deploy/basler_camera` |
-| QR Detector | `qrcode_detector_20260818_v1.0` | `deploy/qrcode_detector` |
-| AprilTag Pose Reader | `apriltag_pose_reader_20260818_v1.0` | `deploy/apriltag_pose_reader` |
-| Keyence SR Wrapper | `keyence_sr_wrapper_20260818_v1.0` | `deploy/keyence_sr_wrapper` |
+| 模块 | 镜像 Tag | 目录 | 备注 |
+| --- | --- | --- | --- |
+| Basler Camera（统一容器） | `basler_camera_20260819_v2.0` | `deploy/basler_camera` | **生产主路径**，包含全部 5 个节点 |
+| QR Detector（独立容器） | `qrcode_detector_20260818_v1.0` | `deploy/qrcode_detector` | 遗留独立部署，非生产主路径 |
+| AprilTag Pose Reader（独立容器） | `apriltag_pose_reader_20260818_v1.0` | `deploy/apriltag_pose_reader` | 遗留独立部署，非生产主路径 |
+| Keyence SR Wrapper（独立容器） | `keyence_sr_wrapper_20260818_v1.0` | `deploy/keyence_sr_wrapper` | 遗留独立部署，非生产主路径 |
 
 ## 2. Docker 构建与运行
 
-### Basler Camera
+### Basler Camera（统一容器，生产主路径）
 
 ```bash
-docker build -f deploy/basler_camera/Dockerfile -t basler_camera_20260818_v1.0 .
+docker build -f deploy/basler_camera/Dockerfile -t basler_camera_20260819_v2.0 .
 cp deploy/basler_camera/.env.example deploy/basler_camera/.env
 docker compose --env-file deploy/basler_camera/.env \
   -f deploy/basler_camera/docker-compose.yml up -d
@@ -154,11 +154,11 @@ docker exec keyence_sr_wrapper /opt/ros2_ws/deploy/keyence_sr_wrapper/smoke_test
 
 ### Basler
 
-发布：
+发布（`{camera_id}` 默认 `my_camera`）：
 
-- `/my_camera/pylon_ros2_camera_node/image_raw` `sensor_msgs/msg/Image`
-- `/my_camera/pylon_ros2_camera_node/camera_info` `sensor_msgs/msg/CameraInfo`
-- `/my_camera/pylon_ros2_camera_node/status` `pylon_ros2_camera_interfaces/msg/ComponentStatus`
+- `/{camera_id}/pylon_ros2_camera_node/image_raw` `sensor_msgs/msg/Image`
+- `/{camera_id}/pylon_ros2_camera_node/camera_info` `sensor_msgs/msg/CameraInfo`
+- `/{camera_id}/pylon_ros2_camera_node/status` `pylon_ros2_camera_interfaces/msg/ComponentStatus`
 
 服务：
 
@@ -172,35 +172,35 @@ docker exec keyence_sr_wrapper /opt/ros2_ws/deploy/keyence_sr_wrapper/smoke_test
 
 订阅：
 
-- `/my_camera/pylon_ros2_camera_node/image_raw`
+- `/{camera_id}/pylon_ros2_camera_node/image_raw`
 
 发布：
 
-- `/wechat_qr_node/decoded_info` `std_msgs/msg/String`
+- `/{camera_id}/qr/decoded_info` `std_msgs/msg/String`
 
 ### AprilTag
 
 订阅：
 
-- `/detections`
+- `/{camera_id}/detections`
 - `/tf`
-- `/my_camera/pylon_ros2_camera_node/image_raw`
-- `/my_camera/pylon_ros2_camera_node/camera_info`
+- `/{camera_id}/pylon_ros2_camera_node/image_raw`
+- `/{camera_id}/pylon_ros2_camera_node/camera_info`
 
 发布：
 
-- `/apriltag/pose` `geometry_msgs/msg/PoseStamped`
-- `/apriltag/transform` `geometry_msgs/msg/TransformStamped`
+- `/{camera_id}/apriltag/pose` `geometry_msgs/msg/PoseStamped`
+- `/{camera_id}/apriltag/transform` `geometry_msgs/msg/TransformStamped`
 
 ### Keyence
 
 发布：
 
-- `/scanner/barcode` `std_msgs/msg/String`
+- `/{camera_id}/scanner/barcode` `std_msgs/msg/String`
 
 服务：
 
-- `/scanner/trigger` `std_srvs/srv/Trigger`
+- `/{camera_id}/scanner/trigger` `std_srvs/srv/Trigger`
 
 ## 8. 更新日志摘要
 
