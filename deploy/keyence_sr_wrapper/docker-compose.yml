@@ -9,6 +9,14 @@ services:
       RMW_IMPLEMENTATION: ${RMW_IMPLEMENTATION:-rmw_fastrtps_cpp}
       SCANNER_IP: ${SCANNER_IP:-172.31.0.91}
       SCANNER_PORT: ${SCANNER_PORT:-9004}
+    mem_limit: ${MEM_LIMIT:-1g}
+    memswap_limit: ${MEM_SWAP_LIMIT:-1g}
+    cpus: ${CPUS_LIMIT:-1.0}
+    logging:
+      driver: json-file
+      options:
+        max-size: "${LOG_MAX_SIZE:-50m}"
+        max-file: "${LOG_MAX_FILE:-3}"
     healthcheck:
       test: ["CMD-SHELL", "/opt/ros2_ws/deploy/keyence_sr_wrapper/healthcheck.sh"]
       interval: 15s

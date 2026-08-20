@@ -194,7 +194,15 @@ bool PylonROS2CameraNode::init()
 
   // cache flags to avoid per-frame string comparisons in the grab path
   this->pylon_camera_->chunk_mode_active_ = (this->pylon_camera_->getChunkModeActive() == 1);
+  // 缓存 chunk timestamp 状态，避免每帧 2 次 GenICam 网络往返
+  if (this->pylon_camera_->chunk_mode_active_)
+  {
+    const std::string success = this->pylon_camera_->setChunkSelector(29);
+    this->pylon_camera_->chunk_timestamp_enabled_ =
+      (success.find("done") != std::string::npos && this->pylon_camera_->getChunkEnable() == 1);
+  }
   const std::string ros_enc = this->pylon_camera_->currentROSEncoding();
+  this->pylon_camera_->cached_ros_encoding_ = ros_enc;
   const std::string gen_api_enc = this->pylon_camera_->currentBaslerEncoding();
   this->pylon_camera_->bit_shift_active_ = encodingconversions::is_12_bit_ros_enc(ros_enc) &&
       (gen_api_enc == "BayerRG12" || gen_api_enc == "BayerBG12" || gen_api_enc == "BayerGB12" ||
@@ -229,7 +237,10 @@ void PylonROS2CameraNode::initPublishers()
   this->component_status_pub_ = this->create_publisher<pylon_ros2_camera_interfaces::msg::ComponentStatus>(msg_name, 5);
 
   msg_name = msg_prefix + "image_raw";
-  this->img_raw_pub_ = image_transport::create_camera_publisher(this, msg_name);
+  // BEST_EFFORT + depth 1: 丢弃旧帧而非阻塞采集循环，适合实时图像处理
+  rclcpp::QoS image_qos(1);
+  image_qos.best_effort();
+  this->img_raw_pub_ = image_transport::create_camera_publisher(this, msg_name, image_qos.get_rmw_qos_profile());
 
   // blaze related topics
   msg_name = msg_prefix + "blaze_cloud"; this->blaze_cloud_topic_name_ = msg_name;
@@ -1172,10 +1183,10 @@ void PylonROS2CameraNode::spin()
         }
       }
 
-      // Check if the image encoding changed , then save the new image encoding and restart the image grabbing to fix the ros sensor message type issue.
-      if (this->pylon_camera_parameter_set_.imageEncoding() != this->pylon_camera_->currentROSEncoding()) 
+      // Check if the image encoding changed (using cached value to avoid per-frame GenICam read)
+      if (this->pylon_camera_parameter_set_.imageEncoding() != this->pylon_camera_->cached_ros_encoding_)
       {
-        this->pylon_camera_parameter_set_.setimageEncodingParam(*this, this->pylon_camera_->currentROSEncoding());
+        this->pylon_camera_parameter_set_.setimageEncodingParam(*this, this->pylon_camera_->cached_ros_encoding_);
         this->grabbingStopping();
         this->grabbingStarting();
       }
@@ -4056,6 +4067,7 @@ void PylonROS2CameraNode::setImageEncodingCallback(const std::shared_ptr<SetStri
   {
     response->success = true;
     pylon_camera_parameter_set_.setimageEncodingParam(*this,request->value);
+    this->pylon_camera_->cached_ros_encoding_ = this->pylon_camera_->currentROSEncoding();
   }
   else 
   {

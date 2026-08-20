@@ -13,6 +13,14 @@ services:
       QUEUE_SIZE: ${QUEUE_SIZE:-10}
     volumes:
       - ./config:/opt/ros2_ws/deploy/qrcode_detector/config:ro
+    mem_limit: ${MEM_LIMIT:-2g}
+    memswap_limit: ${MEM_SWAP_LIMIT:-2g}
+    cpus: ${CPUS_LIMIT:-2.0}
+    logging:
+      driver: json-file
+      options:
+        max-size: "${LOG_MAX_SIZE:-50m}"
+        max-file: "${LOG_MAX_FILE:-3}"
     healthcheck:
       test: ["CMD-SHELL", "/opt/ros2_ws/deploy/qrcode_detector/healthcheck.sh"]
       interval: 15s

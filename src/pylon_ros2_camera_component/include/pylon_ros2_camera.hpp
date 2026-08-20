@@ -1285,6 +1285,8 @@ public:
      * bit_shift_active_: true if 12-bit left-shift is needed; reset when encoding changes.
      */
     bool chunk_mode_active_{false};
+    bool chunk_timestamp_enabled_{false};
+    std::string cached_ros_encoding_;
     bool bit_shift_active_{false};
 
 protected:
@@ -1325,6 +1327,11 @@ protected:
      * The size of the image in number of bytes.
      */
     size_t img_size_byte_;
+
+    /**
+     * Reusable buffer for 12-bit bit-shift conversion, avoids per-frame heap allocation.
+     */
+    std::vector<uint16_t> shift_buffer_;
 
     /**
      * The max time a single grab is allowed to take. This value should always

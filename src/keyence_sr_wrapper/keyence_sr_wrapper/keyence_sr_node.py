@@ -138,6 +138,8 @@ class KeyenceSRNode(Node):
         if need_reconnect:
             self.get_logger().info('正在重新连接扫码器...')
             self.connect_to_scanner()
+            if self.client_socket is None:
+                return SetParametersResult(successful=False, reason='Reconnection failed')
 
         return SetParametersResult(successful=True)
 

@@ -524,6 +524,13 @@ class WeChatQRNode(Node):
             return decoded_list, pts_list
 
         # ---- OpenCV 后端 ----
+        # 工业场景通常只有一个 QR 码，优先用 detectAndDecode（更快）
+        # 如果未检测到且 detectAndDecodeMulti 可用，再尝试多码检测
+        decoded_info, pts, _ = self.detector.detectAndDecode(cv_image)
+        if decoded_info:
+            pts_list = [np.array(pts, dtype=np.float64)] if pts is not None else []
+            return [decoded_info], pts_list
+
         if hasattr(self.detector, 'detectAndDecodeMulti'):
             result = self.detector.detectAndDecodeMulti(cv_image)
             if isinstance(result, tuple) and len(result) >= 2:
@@ -537,10 +544,6 @@ class WeChatQRNode(Node):
                             pts_list.append(np.array(raw_pts[i], dtype=np.float64))
                 return decoded_list, pts_list
 
-        decoded_info, pts, _ = self.detector.detectAndDecode(cv_image)
-        if decoded_info:
-            pts_list = [np.array(pts, dtype=np.float64)] if pts is not None else []
-            return [decoded_info], pts_list
         return [], []
 
     # ======================================================================
