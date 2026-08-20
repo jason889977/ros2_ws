@@ -6,7 +6,7 @@
 # calibration output from the calibration helper when available.
 image_width: 1294
 image_height: 970
-camera_name: 106611_18
+camera_name: apriltagCam
 camera_matrix:
   rows: 3
   cols: 3
