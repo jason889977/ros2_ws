@@ -1,4 +1,4 @@
-# ROS2 Basler Camera + QR Detector Workspace
+# ROS2 Basler Camera + QR Detector + AprilTag Detector + Keyence Detector Workspace
 
 这是一个基于 ROS 2 Humble 的工业视觉工作区，当前生产基线为统一容器运行模式。
 
