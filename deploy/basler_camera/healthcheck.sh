@@ -14,13 +14,10 @@ check_camera() {
 }
 
 # 1. Every configured camera must be healthy.
-namespace="/${CAMERA_ID:-my_camera}"
 check_camera "${CAMERA_ID:-my_camera}" || exit 1
 if [[ -n "${CAMERA_ID_2:-}" ]]; then
   check_camera "$CAMERA_ID_2" || exit 1
 fi
-
-WARNINGS=""
 
 check_modules() {
   local camera_id="$1"
@@ -29,36 +26,35 @@ check_modules() {
   local enable_keyence="$4"
   local module_namespace="/${camera_id}"
 
-  # Detection nodes respawn, so missing modules are warnings rather than a
-  # container failure. Check every configured camera independently.
+  # An enabled module is required for this pipeline to be healthy. Compose's
+  # start period absorbs normal respawn/startup delay before health is checked.
   if [[ "$enable_apriltag" == "true" ]]; then
     if ! ros2 node list 2>/dev/null | grep -Fxq "${module_namespace}/apriltag_pose_reader"; then
-      WARNINGS="${WARNINGS}${camera_id}: apriltag_pose_reader not running; "
+      echo "${camera_id}: apriltag_pose_reader not running" >&2
+      return 1
+    fi
   fi
-fi
 
   if [[ "$enable_qrcode" == "true" ]]; then
     if ! ros2 node list 2>/dev/null | grep -Fxq "${module_namespace}/wechat_qr_node"; then
-      WARNINGS="${WARNINGS}${camera_id}: wechat_qr_node not running; "
+      echo "${camera_id}: wechat_qr_node not running" >&2
+      return 1
+    fi
   fi
-fi
 
   if [[ "$enable_keyence" == "true" ]]; then
     if ! ros2 node list 2>/dev/null | grep -Fxq "${module_namespace}/keyence_sr_node"; then
-      WARNINGS="${WARNINGS}${camera_id}: keyence_sr_node not running; "
+      echo "${camera_id}: keyence_sr_node not running" >&2
+      return 1
+    fi
   fi
-fi
 }
 
 check_modules "${CAMERA_ID:-my_camera}" "${ENABLE_APRILTAG:-true}" \
-  "${ENABLE_QRCODE:-true}" "${ENABLE_KEYENCE:-true}"
+  "${ENABLE_QRCODE:-true}" "${ENABLE_KEYENCE:-true}" || exit 1
 if [[ -n "${CAMERA_ID_2:-}" ]]; then
   check_modules "$CAMERA_ID_2" "${ENABLE_APRILTAG_2:-true}" \
-    "${ENABLE_QRCODE_2:-true}" "${ENABLE_KEYENCE_2:-true}"
-fi
-
-if [[ -n "$WARNINGS" ]]; then
-  echo "HEALTHY (camera OK) WARNINGS: ${WARNINGS}" >&2
+    "${ENABLE_QRCODE_2:-true}" "${ENABLE_KEYENCE_2:-true}" || exit 1
 fi
 
 echo "OK"

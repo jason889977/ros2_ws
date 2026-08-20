@@ -36,6 +36,10 @@ if [[ "${*}" == *"vision_pipeline.launch.py"* ]]; then
   )
 
   if [[ -n "${CAMERA_ID_2:-}" ]]; then
+    if [[ "$CAMERA_ID_2" == "$CAM1_ID" ]]; then
+      echo "[entrypoint] CAMERA_ID_2 must differ from CAMERA_ID" >&2
+      exit 64
+    fi
     if [[ -z "${CAMERA_CONFIG_2:-}" ]]; then
       echo "[entrypoint] CAMERA_CONFIG_2 is required when CAMERA_ID_2 is set" >&2
       exit 64

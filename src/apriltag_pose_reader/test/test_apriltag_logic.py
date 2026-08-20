@@ -55,6 +55,7 @@ class TestAprilTagFrameFromDetection(unittest.TestCase):
         node._latest_frame_hint = None
         node._candidate_cache = None
         node._candidate_cache_dirty = True
+        node._tf_buffer = MagicMock()
         return node
 
     def test_frame_from_valid_detection(self):

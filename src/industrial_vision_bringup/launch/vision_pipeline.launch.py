@@ -5,6 +5,7 @@ Each detection module (AprilTag, QR, Keyence) can be independently enabled/disab
 """
 
 import os
+import math
 
 from ament_index_python.packages import get_package_share_directory
 from launch import LaunchDescription
@@ -13,6 +14,32 @@ from launch.actions import OpaqueFunction
 from launch.conditions import IfCondition
 from launch_ros.actions import ComposableNodeContainer, Node
 from launch_ros.descriptions import ComposableNode
+
+
+def parse_scanner_settings(scanner_port_value, reconnect_interval_value):
+    """Parse and validate scanner connection settings from launch arguments."""
+    try:
+        scanner_port = int(scanner_port_value)
+    except ValueError as error:
+        raise RuntimeError(
+            f'Invalid scanner_port={scanner_port_value!r}; expected an integer from 1 to 65535.'
+        ) from error
+    if not 1 <= scanner_port <= 65535:
+        raise RuntimeError(
+            f'Invalid scanner_port={scanner_port_value!r}; expected an integer from 1 to 65535.'
+        )
+
+    try:
+        reconnect_interval_s = float(reconnect_interval_value)
+    except ValueError as error:
+        raise RuntimeError(
+            f'Invalid reconnect_interval_s={reconnect_interval_value!r}; expected a finite value >= 0.'
+        ) from error
+    if not math.isfinite(reconnect_interval_s) or reconnect_interval_s < 0.0:
+        raise RuntimeError(
+            f'Invalid reconnect_interval_s={reconnect_interval_value!r}; expected a finite value >= 0.'
+        )
+    return scanner_port, reconnect_interval_s
 
 
 def launch_pipeline(context):
@@ -26,6 +53,10 @@ def launch_pipeline(context):
     enable_apriltag = context.launch_configurations['enable_apriltag']
     enable_qrcode = context.launch_configurations['enable_qrcode']
     enable_keyence = context.launch_configurations['enable_keyence']
+    scanner_port, reconnect_interval_s = parse_scanner_settings(
+        scanner_port,
+        reconnect_interval_s,
+    )
 
     camera_info_topic = f'/{camera_id}/pylon_ros2_camera_node/camera_info'
     image_topic = f'/{camera_id}/pylon_ros2_camera_node/image_raw'
@@ -157,8 +188,8 @@ def launch_pipeline(context):
         condition=IfCondition(enable_keyence),
         parameters=[{
             'scanner_ip': scanner_ip,
-            'scanner_port': int(scanner_port),
-            'reconnect_interval_s': float(reconnect_interval_s),
+            'scanner_port': scanner_port,
+            'reconnect_interval_s': reconnect_interval_s,
         }],
         remappings=[
             ('~/barcode', scanner_barcode_topic),

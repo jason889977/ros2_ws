@@ -572,14 +572,19 @@ class WeChatQRNode(Node):
             return True
         now = time.monotonic()
         previous = self._last_published_at.get(info)
-        self._last_published_at[info] = now
+        should_publish = (
+            previous is None
+            or now - previous >= self._deduplicate_window_s
+        )
+        if should_publish:
+            self._last_published_at[info] = now
         # 定期清理过期条目，防止字典无限增长
         if len(self._last_published_at) > 100:
             cutoff = now - self._deduplicate_window_s * 10
             self._last_published_at = {
                 k: v for k, v in self._last_published_at.items() if v > cutoff
             }
-        return previous is None or now - previous >= self._deduplicate_window_s
+        return should_publish
 
     def compressed_image_callback(self, msg: CompressedImage):
         """压缩图像回调：从 CompressedImage 解码后复用检测逻辑。"""

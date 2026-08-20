@@ -2,6 +2,7 @@
 
 import time
 import unittest
+from unittest.mock import patch
 
 import numpy as np
 
@@ -44,6 +45,17 @@ class TestQRDeduplication(unittest.TestCase):
         node._should_publish('ABC123')
         time.sleep(0.15)
         self.assertTrue(node._should_publish('ABC123'))
+
+    def test_suppressed_duplicates_do_not_extend_window(self):
+        node = _DedupTestNode(0.5)
+        with patch(
+            'qrcode_detector.qrcode_node.time.monotonic',
+            side_effect=[0.0, 0.2, 0.4, 0.6],
+        ):
+            self.assertTrue(node._should_publish('ABC123'))
+            self.assertFalse(node._should_publish('ABC123'))
+            self.assertFalse(node._should_publish('ABC123'))
+            self.assertTrue(node._should_publish('ABC123'))
 
 
 class TestQRCorners(unittest.TestCase):

@@ -166,7 +166,8 @@ class AprilTagPoseReader(Node):
         # ------------------------------------------------------------------
         # Buffer: 存储所有收到的坐标变换，形成一个变换树
         self._tf_buffer = Buffer()
-        # TransformListener: 自动订阅 /tf 话题，将收到的变换存入 Buffer
+        # TransformListener: 自动订阅 /tf 话题，将收到的变换存入 Buffer。
+        # 自定义 _tf_topic 的数据由 _on_tf_message 同步写入该 Buffer。
         # spin_thread=False: TF 回调由 MultiThreadedExecutor 调度，避免双线程竞争共享状态
         self._tf_listener = TransformListener(self._tf_buffer, self, spin_thread=False)
 
@@ -446,6 +447,9 @@ class AprilTagPoseReader(Node):
             for transform in msg.transforms:
                 if self._is_auto_tag_frame(transform.child_frame_id):
                     self._remember_tag_frame(transform.child_frame_id)
+
+        for transform in msg.transforms:
+            self._tf_buffer.set_transform(transform, 'apriltag_pose_reader')
 
         candidate_frames = self._candidate_frames()
         if not candidate_frames:
