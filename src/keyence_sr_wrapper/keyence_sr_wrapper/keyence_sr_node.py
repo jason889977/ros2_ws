@@ -5,7 +5,8 @@ import threading
 from typing import Any
 
 import rclpy
-from rclpy.executors import ExternalShutdownException
+from rclpy.callback_groups import MutuallyExclusiveCallbackGroup
+from rclpy.executors import ExternalShutdownException, MultiThreadedExecutor
 from rclpy.node import Node
 from rclpy.parameter import Parameter
 from std_msgs.msg import String
@@ -64,7 +65,8 @@ class KeyenceSRNode(Node):
         #   - 服务名称: '~/trigger'，外部节点可通过调用此服务触发一次扫码
         #   - 服务类型: Trigger，请求为空，响应包含 success(bool) 和 message(string)
         #   - 回调函数: trigger_scan_callback，当有客户端调用此服务时自动执行
-        self.srv = self.create_service(Trigger, '~/trigger', self.trigger_scan_callback)
+        self._service_cb_group = MutuallyExclusiveCallbackGroup()
+        self.srv = self.create_service(Trigger, '~/trigger', self.trigger_scan_callback, callback_group=self._service_cb_group)
 
         # 注册参数变更回调，支持运行时修改 scanner_ip / scanner_port 后自动重连
         self.add_on_set_parameters_callback(self._on_parameter_changed)
@@ -100,6 +102,7 @@ class KeyenceSRNode(Node):
                 #   socket.AF_INET 表示使用 IPv4 地址族
                 #   socket.SOCK_STREAM 表示使用 TCP 协议（面向连接、可靠传输）
                 self.client_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+                self.client_socket.setsockopt(socket.SOL_SOCKET, socket.SO_KEEPALIVE, 1)
 
                 # 设置套接字的超时时间为 3.0 秒
                 # 后续所有阻塞操作（如 connect、recv）如果在 3 秒内未完成，将抛出 socket.timeout 异常
@@ -247,11 +250,14 @@ def main(args: Any = None) -> None:
     rclpy.init(args=args)
 
     node = KeyenceSRNode()
+    executor = MultiThreadedExecutor()
+    executor.add_node(node)
     try:
-        rclpy.spin(node)
+        executor.spin()
     except (KeyboardInterrupt, ExternalShutdownException):
         pass
     finally:
+        executor.shutdown()
         node.destroy_node()
         if rclpy.ok():
             rclpy.shutdown()

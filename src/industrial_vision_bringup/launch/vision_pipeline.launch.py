@@ -86,6 +86,7 @@ def launch_pipeline(context):
         namespace=camera_id,
         output='screen',
         respawn=True,
+        respawn_delay=3.0,
         condition=IfCondition(enable_apriltag),
         remappings=[
             ('image_rect', image_topic),
@@ -101,6 +102,7 @@ def launch_pipeline(context):
         namespace=camera_id,
         output='screen',
         respawn=True,
+        respawn_delay=3.0,
         condition=IfCondition(enable_apriltag),
         parameters=[{
             'detections_topic': detections_topic,
@@ -125,6 +127,7 @@ def launch_pipeline(context):
         namespace=camera_id,
         output='screen',
         respawn=True,
+        respawn_delay=3.0,
         arguments=['raw', 'compressed'],
         remappings=[
             ('in', image_topic),
@@ -142,6 +145,7 @@ def launch_pipeline(context):
         namespace=camera_id,
         output='screen',
         respawn=True,
+        respawn_delay=3.0,
         condition=IfCondition(enable_qrcode),
         parameters=[{
             'image_topic': image_topic,
@@ -167,6 +171,7 @@ def launch_pipeline(context):
         namespace=camera_id,
         output='screen',
         respawn=True,
+        respawn_delay=3.0,
         condition=IfCondition(enable_keyence),
         parameters=[{
             'scanner_ip': scanner_ip,

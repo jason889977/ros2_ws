@@ -59,8 +59,27 @@ if [[ "${*}" == *"vision_pipeline.launch.py"* ]]; then
     ros2 launch industrial_vision_bringup vision_pipeline.launch.py "${CAM2_ARGS[@]}" &
     PID2=$!
 
-    trap 'kill $PID1 $PID2 2>/dev/null || true' EXIT INT TERM
-    wait $PID1 $PID2
+    _cleanup() {
+      kill "$PID1" "$PID2" 2>/dev/null || true
+      # 等待子进程退出，最多 10 秒
+      for i in $(seq 1 10); do
+        kill -0 "$PID1" 2>/dev/null || kill -0 "$PID2" 2>/dev/null || break
+        sleep 1
+      done
+      # 仍未退出则强制杀死
+      kill -9 "$PID1" "$PID2" 2>/dev/null || true
+      wait "$PID1" "$PID2" 2>/dev/null || true
+    }
+    trap _cleanup EXIT INT TERM
+    wait "$PID1"
+    EXIT1=$?
+    wait "$PID2"
+    EXIT2=$?
+    # 传播子进程退出码：任一非零则容器标记为失败，触发 Docker restart
+    if [[ $EXIT1 -ne 0 || $EXIT2 -ne 0 ]]; then
+      echo "[entrypoint] Pipeline exited with errors: cam1=$EXIT1 cam2=$EXIT2" >&2
+      exit 1
+    fi
   else
     echo "[entrypoint] Launching single-camera pipeline: $CAM1_ID"
     exec ros2 launch industrial_vision_bringup vision_pipeline.launch.py "${CAM1_ARGS[@]}"

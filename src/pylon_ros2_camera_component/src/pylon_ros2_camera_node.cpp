@@ -1278,7 +1278,7 @@ bool PylonROS2CameraNode::grabImage()
 bool PylonROS2CameraNode::setExposure(const float& target_exposure, float& reached_exposure)
 {
   std::lock_guard<std::recursive_mutex> lock(this->grab_mutex_);
-  if (!this->pylon_camera_->isReady())
+  if (!this->pylon_camera_ || !this->pylon_camera_->isReady())
   {
     RCLCPP_WARN(LOGGER, "Error in setExposure(): pylon_camera_ is not ready!");
     return false;
@@ -1319,6 +1319,12 @@ bool PylonROS2CameraNode::setBrightness(const int& target_brightness,
                                         const bool& exposure_auto,
                                         const bool& gain_auto)
 {
+  if (!this->pylon_camera_ || !this->pylon_camera_->isReady())
+  {
+    RCLCPP_WARN(LOGGER, "Error in setBrightness(): pylon_camera_ is not ready!");
+    return false;
+  }
+
   if (this->pylon_camera_->isBlaze())
   {
     RCLCPP_WARN(LOGGER, "Trying to set brightness: there's no brightness parameter with the blaze camera - returning -9999");
@@ -1549,7 +1555,7 @@ bool PylonROS2CameraNode::setGain(const float& target_gain, float& reached_gain)
   }
 
   std::lock_guard<std::recursive_mutex> lock(this->grab_mutex_);
-  if (!this->pylon_camera_->isReady())
+  if (!this->pylon_camera_ || !this->pylon_camera_->isReady())
   {
     RCLCPP_WARN(LOGGER, "Error in setGain(): pylon_camera_ is not ready!");
     return false;
@@ -1593,7 +1599,7 @@ bool PylonROS2CameraNode::setGamma(const float& target_gamma, float& reached_gam
   }
 
   std::lock_guard<std::recursive_mutex> lock(this->grab_mutex_);
-  if (!this->pylon_camera_->isReady())
+  if (!this->pylon_camera_ || !this->pylon_camera_->isReady())
   {
     RCLCPP_WARN(LOGGER, "Error in setGamma(): pylon_camera_ is not ready!");
     return false;
@@ -1801,7 +1807,7 @@ std::string PylonROS2CameraNode::setOffsetXY(const int& offsetValue, bool xAxis)
   }
 
   std::lock_guard<std::recursive_mutex> lock(this->grab_mutex_);
-  if (!this->pylon_camera_->isReady())
+  if (!this->pylon_camera_ || !this->pylon_camera_->isReady())
   {
     RCLCPP_WARN(LOGGER, "Error in setOffsetXY(): pylon_camera_ is not ready!");
     return "pylon camera is not ready!";
@@ -1818,7 +1824,7 @@ std::string PylonROS2CameraNode::reverseXY(const bool& data, bool around_x)
   }
 
   std::lock_guard<std::recursive_mutex> lock(this->grab_mutex_);
-  if (!this->pylon_camera_->isReady())
+  if (!this->pylon_camera_ || !this->pylon_camera_->isReady())
   {
     RCLCPP_WARN(LOGGER, "Error in reverseXY(): pylon_camera_ is not ready!");
     return "pylon camera is not ready!";
@@ -1836,7 +1842,7 @@ std::string PylonROS2CameraNode::setBlackLevel(const int& value)
   }
 
   std::lock_guard<std::recursive_mutex> lock(this->grab_mutex_);
-  if (!this->pylon_camera_->isReady())
+  if (!this->pylon_camera_ || !this->pylon_camera_->isReady())
   {
     RCLCPP_WARN(LOGGER, "Error in setBlackLevel(): pylon_camera_ is not ready!");
     return "pylon camera is not ready!";
@@ -1856,7 +1862,7 @@ std::string PylonROS2CameraNode::setPGIMode(const bool& on)
   // mode 0 = Simple
   // mode 1 = Basler PGI
   std::lock_guard<std::recursive_mutex> lock(this->grab_mutex_);
-  if (!this->pylon_camera_->isReady())
+  if (!this->pylon_camera_ || !this->pylon_camera_->isReady())
   {
     RCLCPP_WARN(LOGGER, "Error in setPGIMode(): pylon_camera_ is not ready!");
     return "pylon camera is not ready!";
@@ -1876,7 +1882,7 @@ std::string PylonROS2CameraNode::setDemosaicingMode(const int& mode)
   // mode 0 = Simple
   // mode 1 = Basler PGI
   std::lock_guard<std::recursive_mutex> lock(this->grab_mutex_);
-  if (!this->pylon_camera_->isReady())
+  if (!this->pylon_camera_ || !this->pylon_camera_->isReady())
   {
     RCLCPP_WARN(LOGGER, "Error in setDemosaicingMode(): pylon_camera_ is not ready!");
     return "pylon camera is not ready!";
@@ -1894,7 +1900,7 @@ std::string PylonROS2CameraNode::setNoiseReduction(const float& value)
   }
 
   std::lock_guard<std::recursive_mutex> lock(this->grab_mutex_);
-  if (!this->pylon_camera_->isReady())
+  if (!this->pylon_camera_ || !this->pylon_camera_->isReady())
   {
     RCLCPP_WARN(LOGGER, "Error in setNoiseReduction(): pylon_camera_ is not ready!");
     return "pylon camera is not ready!";
@@ -1912,7 +1918,7 @@ std::string PylonROS2CameraNode::setSharpnessEnhancement(const float& value)
   }
 
   std::lock_guard<std::recursive_mutex> lock(this->grab_mutex_);
-  if (!this->pylon_camera_->isReady())
+  if (!this->pylon_camera_ || !this->pylon_camera_->isReady())
   {
     RCLCPP_WARN(LOGGER, "Error in setSharpnessEnhancement(): pylon_camera_ is not ready!");
     return "pylon camera is not ready!";
@@ -1934,7 +1940,7 @@ std::string PylonROS2CameraNode::setLightSourcePreset(const int& mode)
   // mode 2 = Daylight6500K
   // mode 3 = Tungsten2800K
   std::lock_guard<std::recursive_mutex> lock(this->grab_mutex_);
-  if (!this->pylon_camera_->isReady())
+  if (!this->pylon_camera_ || !this->pylon_camera_->isReady())
   {
     RCLCPP_WARN(LOGGER, "Error in setLightSourcePreset(): pylon_camera_ is not ready!");
     return "pylon camera is not ready!";
@@ -1955,7 +1961,7 @@ std::string PylonROS2CameraNode::setWhiteBalanceAuto(const int& mode)
   // mode 1 = Once
   // mode 2 = Continuous
   std::lock_guard<std::recursive_mutex> lock(this->grab_mutex_);
-  if (!this->pylon_camera_->isReady())
+  if (!this->pylon_camera_ || !this->pylon_camera_->isReady())
   {
     RCLCPP_WARN(LOGGER, "Error in setBalanceWhiteAuto(): pylon_camera_ is not ready!");
     return "pylon camera is not ready!";
@@ -1975,7 +1981,7 @@ std::string PylonROS2CameraNode::setSensorReadoutMode(const int& mode)
   // mode = 0 : normal readout mode
   // mode = 1 : fast readout mode
   std::lock_guard<std::recursive_mutex> lock(this->grab_mutex_);
-  if (!this->pylon_camera_->isReady())
+  if (!this->pylon_camera_ || !this->pylon_camera_->isReady())
   {
     RCLCPP_WARN(LOGGER, "Error in setSensorReadoutMode(): pylon_camera_ is not ready!");
     return "pylon camera is not ready!";
@@ -1993,7 +1999,7 @@ std::string PylonROS2CameraNode::setAcquisitionFrameCount(const int& frameCount)
   }
 
   std::lock_guard<std::recursive_mutex> lock(this->grab_mutex_);
-  if (!this->pylon_camera_->isReady())
+  if (!this->pylon_camera_ || !this->pylon_camera_->isReady())
   {
     RCLCPP_WARN(LOGGER, "Error in setAcquisitionFrameCount(): pylon_camera_ is not ready!");
     return "pylon camera is not ready!";
@@ -2007,7 +2013,7 @@ std::string PylonROS2CameraNode::setTriggerSelector(const int& mode)
   // mode 0 = Frame start
   // mode 1 = Frame burst start (ace USB cameras) / Acquisition Start (ace GigE cameras)
   std::lock_guard<std::recursive_mutex> lock(this->grab_mutex_);
-  if (!this->pylon_camera_->isReady())
+  if (!this->pylon_camera_ || !this->pylon_camera_->isReady())
   {
     RCLCPP_WARN(LOGGER, "Error in setTriggerSelector(): pylon_camera_ is not ready!");
     return "pylon camera is not ready!";
@@ -2019,7 +2025,7 @@ std::string PylonROS2CameraNode::setTriggerSelector(const int& mode)
 std::string PylonROS2CameraNode::setTriggerMode(const bool& value)
 {   
   std::lock_guard<std::recursive_mutex> lock(this->grab_mutex_);
-  if (!this->pylon_camera_->isReady())
+  if (!this->pylon_camera_ || !this->pylon_camera_->isReady())
   {
     RCLCPP_WARN(LOGGER, "Error in setTriggerMode(): pylon_camera_ is not ready!");
     return "pylon camera is not ready!";
@@ -2031,7 +2037,7 @@ std::string PylonROS2CameraNode::setTriggerMode(const bool& value)
 std::string PylonROS2CameraNode::executeSoftwareTrigger()
 {   
   std::lock_guard<std::recursive_mutex> lock(this->grab_mutex_);
-  if (!this->pylon_camera_->isReady())
+  if (!this->pylon_camera_ || !this->pylon_camera_->isReady())
   {
     RCLCPP_WARN(LOGGER, "Error in executeSoftwareTrigger(): pylon_camera_ is not ready!");
     return "pylon camera is not ready!";
@@ -2043,7 +2049,7 @@ std::string PylonROS2CameraNode::executeSoftwareTrigger()
 std::string PylonROS2CameraNode::setTriggerSource(const int& source)
 {
   std::lock_guard<std::recursive_mutex> lock(this->grab_mutex_);
-  if (!this->pylon_camera_->isReady())
+  if (!this->pylon_camera_ || !this->pylon_camera_->isReady())
   {
     RCLCPP_WARN(LOGGER, "Error in setTriggerSource(): pylon_camera_ is not ready!");
     return "pylon camera is not ready!";
@@ -2061,7 +2067,7 @@ std::string PylonROS2CameraNode::setTriggerActivation(const int& value)
   }
 
   std::lock_guard<std::recursive_mutex> lock(this->grab_mutex_);
-  if (!this->pylon_camera_->isReady())
+  if (!this->pylon_camera_ || !this->pylon_camera_->isReady())
   {
     RCLCPP_WARN(LOGGER, "Error in setTriggerActivation(): pylon_camera_ is not ready!");
     return "pylon camera is not ready!";
@@ -2079,7 +2085,7 @@ std::string PylonROS2CameraNode::setTriggerDelay(const float& value)
   }
 
   std::lock_guard<std::recursive_mutex> lock(this->grab_mutex_);
-  if (!this->pylon_camera_->isReady())
+  if (!this->pylon_camera_ || !this->pylon_camera_->isReady())
   {
     RCLCPP_WARN(LOGGER, "Error in setTriggerDelay(): pylon_camera_ is not ready!");
     return "pylon camera is not ready!";
@@ -2097,7 +2103,7 @@ std::string PylonROS2CameraNode::setTriggerDelay(const float& value)
 std::string PylonROS2CameraNode::setLineSelector(const int& value)
 {   
   std::lock_guard<std::recursive_mutex> lock(this->grab_mutex_);
-  if (!this->pylon_camera_->isReady())
+  if (!this->pylon_camera_ || !this->pylon_camera_->isReady())
   {
     RCLCPP_WARN(LOGGER, "Error in setLineSelector(): pylon_camera_ is not ready!");
     return "pylon camera is not ready!";
@@ -2109,7 +2115,7 @@ std::string PylonROS2CameraNode::setLineSelector(const int& value)
 std::string PylonROS2CameraNode::setLineMode(const int& value)
 {   
   std::lock_guard<std::recursive_mutex> lock(this->grab_mutex_);
-  if (!this->pylon_camera_->isReady())
+  if (!this->pylon_camera_ || !this->pylon_camera_->isReady())
   {
     RCLCPP_WARN(LOGGER, "Error in setLineMode(): pylon_camera_ is not ready!");
     return "pylon camera is not ready!";
@@ -2121,7 +2127,7 @@ std::string PylonROS2CameraNode::setLineMode(const int& value)
 std::string PylonROS2CameraNode::setLineSource(const int& value)
 {   
   std::lock_guard<std::recursive_mutex> lock(this->grab_mutex_);
-  if (!this->pylon_camera_->isReady())
+  if (!this->pylon_camera_ || !this->pylon_camera_->isReady())
   {
     RCLCPP_WARN(LOGGER, "Error in setLineSource(): pylon_camera_ is not ready!");
     return "pylon camera is not ready!";
@@ -2139,7 +2145,7 @@ std::string PylonROS2CameraNode::setLineInverter(const bool& value)
   }
 
   std::lock_guard<std::recursive_mutex> lock(this->grab_mutex_);
-  if (!this->pylon_camera_->isReady())
+  if (!this->pylon_camera_ || !this->pylon_camera_->isReady())
   {
     RCLCPP_WARN(LOGGER, "Error in setLineInverter(): pylon_camera_ is not ready!");
     return "pylon camera is not ready!";
@@ -2157,7 +2163,7 @@ std::string PylonROS2CameraNode::setLineDebouncerTime(const float& value)
   }
 
   std::lock_guard<std::recursive_mutex> lock(this->grab_mutex_);
-  if (!this->pylon_camera_->isReady())
+  if (!this->pylon_camera_ || !this->pylon_camera_->isReady())
   {
     RCLCPP_WARN(LOGGER, "Error in setLineDebouncerTime(): pylon_camera_ is not ready!");
     return "pylon camera is not ready!";
@@ -2188,7 +2194,7 @@ std::string PylonROS2CameraNode::setUserSetSelector(const int& set)
   // set 5 = AutoFunctions
   // set 6 = ColorRaw
   std::lock_guard<std::recursive_mutex> lock(this->grab_mutex_);
-  if (!this->pylon_camera_->isReady())
+  if (!this->pylon_camera_ || !this->pylon_camera_->isReady())
   {
     RCLCPP_WARN(LOGGER, "Error in setUserSetSelector(): pylon_camera_ is not ready!");
     return "pylon camera is not ready!";
@@ -2206,7 +2212,7 @@ std::string PylonROS2CameraNode::saveUserSet()
   }
 
   std::lock_guard<std::recursive_mutex> lock(this->grab_mutex_);
-  if (!this->pylon_camera_->isReady())
+  if (!this->pylon_camera_ || !this->pylon_camera_->isReady())
   {
     RCLCPP_WARN(LOGGER, "Error in saveUserSet(): pylon_camera_ is not ready!");
     return "pylon camera is not ready!";
@@ -2224,7 +2230,7 @@ std::string PylonROS2CameraNode::loadUserSet()
   }
 
   std::lock_guard<std::recursive_mutex> lock(this->grab_mutex_);
-  if (!this->pylon_camera_->isReady())
+  if (!this->pylon_camera_ || !this->pylon_camera_->isReady())
   {
     RCLCPP_WARN(LOGGER, "Error in loadUserSet(): pylon_camera_ is not ready!");
     return "pylon camera is not ready!";
@@ -2236,7 +2242,7 @@ std::string PylonROS2CameraNode::loadUserSet()
 std::pair<std::string, std::string> PylonROS2CameraNode::getPfs()
 {  
   std::lock_guard<std::recursive_mutex> lock(this->grab_mutex_);
-  if (!this->pylon_camera_->isReady())
+  if (!this->pylon_camera_ || !this->pylon_camera_->isReady())
   {
     RCLCPP_WARN(LOGGER, "Error in getPfs(): pylon_camera_ is not ready!");
     std::pair<std::string, std::string> stringResults;
@@ -2250,7 +2256,7 @@ std::pair<std::string, std::string> PylonROS2CameraNode::getPfs()
 std::string PylonROS2CameraNode::savePfs(const std::string& fileName)
 {  
   std::lock_guard<std::recursive_mutex> lock(this->grab_mutex_);
-  if (!this->pylon_camera_->isReady())
+  if (!this->pylon_camera_ || !this->pylon_camera_->isReady())
   {
     RCLCPP_WARN(LOGGER, "Error in savePfs(): pylon_camera_ is not ready!");
     return "pylon camera is not ready!";
@@ -2262,7 +2268,7 @@ std::string PylonROS2CameraNode::savePfs(const std::string& fileName)
 std::string PylonROS2CameraNode::loadPfs(const std::string& fileName)
 {  
   std::lock_guard<std::recursive_mutex> lock(this->grab_mutex_);
-  if (!this->pylon_camera_->isReady())
+  if (!this->pylon_camera_ || !this->pylon_camera_->isReady())
   {
     RCLCPP_WARN(LOGGER, "Error in loadPfs(): pylon_camera_ is not ready!");
     return "pylon camera is not ready!";
@@ -2287,7 +2293,7 @@ std::string PylonROS2CameraNode::setUserSetDefaultSelector(const int& set)
   // set 5 = AutoFunctions
   // set 6 = ColorRaw
   std::lock_guard<std::recursive_mutex> lock(this->grab_mutex_);
-  if (!this->pylon_camera_->isReady())
+  if (!this->pylon_camera_ || !this->pylon_camera_->isReady())
   {
     RCLCPP_WARN(LOGGER, "Error in setUserSetDefaultSelector(): pylon_camera_ is not ready!");
     return "pylon camera is not ready!";
@@ -2299,7 +2305,7 @@ std::string PylonROS2CameraNode::setUserSetDefaultSelector(const int& set)
 std::string PylonROS2CameraNode::setDeviceLinkThroughputLimitMode(const bool& turnOn)
 {   
   std::lock_guard<std::recursive_mutex> lock(this->grab_mutex_);
-  if (!this->pylon_camera_->isReady())
+  if (!this->pylon_camera_ || !this->pylon_camera_->isReady())
   {
     RCLCPP_WARN(LOGGER, "Error in setDeviceLinkThroughputLimitMode(): pylon_camera_ is not ready!");
     return "pylon camera is not ready!";
@@ -2311,7 +2317,7 @@ std::string PylonROS2CameraNode::setDeviceLinkThroughputLimitMode(const bool& tu
 std::string PylonROS2CameraNode::setDeviceLinkThroughputLimit(const int& limit)
 {   
   std::lock_guard<std::recursive_mutex> lock(this->grab_mutex_);
-  if (!this->pylon_camera_->isReady())
+  if (!this->pylon_camera_ || !this->pylon_camera_->isReady())
   {
     RCLCPP_WARN(LOGGER, "Error in setDeviceLinkThroughputLimit(): pylon_camera_ is not ready!");
     return "pylon camera is not ready!";
@@ -2323,7 +2329,7 @@ std::string PylonROS2CameraNode::setDeviceLinkThroughputLimit(const int& limit)
 std::string PylonROS2CameraNode::triggerDeviceReset()
 {  
   std::lock_guard<std::recursive_mutex> lock(this->grab_mutex_);
-  if (!this->pylon_camera_->isReady())
+  if (!this->pylon_camera_ || !this->pylon_camera_->isReady())
   {
     RCLCPP_WARN(LOGGER, "Error in triggerDeviceReset(): pylon_camera_ is not ready!");
     return "pylon camera is not ready!";
@@ -2335,7 +2341,7 @@ std::string PylonROS2CameraNode::triggerDeviceReset()
 std::string PylonROS2CameraNode::setImageEncoding(const std::string& target_ros_encoding)
 {  
   std::lock_guard<std::recursive_mutex> lock(this->grab_mutex_);
-  if (!this->pylon_camera_->isReady())
+  if (!this->pylon_camera_ || !this->pylon_camera_->isReady())
   {
     RCLCPP_WARN(LOGGER, "Error in setImageEncoding(): pylon_camera_ is not ready!");
     return "pylon camera is not ready!";
@@ -2347,7 +2353,7 @@ std::string PylonROS2CameraNode::setImageEncoding(const std::string& target_ros_
 std::string PylonROS2CameraNode::setMaxTransferSize(const int& maxTransferSize)
 {  
   std::lock_guard<std::recursive_mutex> lock(this->grab_mutex_);
-  if (!this->pylon_camera_->isReady())
+  if (!this->pylon_camera_ || !this->pylon_camera_->isReady())
   {
     RCLCPP_WARN(LOGGER, "Error in setMaxTransferSize(): pylon_camera_ is not ready!");
     return "pylon camera is not ready!";
@@ -2367,7 +2373,7 @@ std::string PylonROS2CameraNode::setGammaSelector(const int& gammaSelector)
   // gammaSelector 0 = User
   // gammaSelector 1 = sRGB
   std::lock_guard<std::recursive_mutex> lock(this->grab_mutex_);
-  if (!this->pylon_camera_->isReady())
+  if (!this->pylon_camera_ || !this->pylon_camera_->isReady())
   {
     RCLCPP_WARN(LOGGER, "Error in setGammaSelector(): pylon_camera_ is not ready!");
     return "pylon camera is not ready!";
@@ -2379,7 +2385,7 @@ std::string PylonROS2CameraNode::setGammaSelector(const int& gammaSelector)
 std::string PylonROS2CameraNode::gammaEnable(const int& enable)
 {
   std::lock_guard<std::recursive_mutex> lock(this->grab_mutex_);
-  if (!this->pylon_camera_->isReady())
+  if (!this->pylon_camera_ || !this->pylon_camera_->isReady())
   {
     RCLCPP_WARN(LOGGER, "Error in gammaEnable(): pylon_camera_ is not ready!");
     return "pylon camera is not ready!";
@@ -2397,6 +2403,12 @@ void PylonROS2CameraNode::getMaxNumBufferCallback(const std::shared_ptr<GetInteg
                                                   std::shared_ptr<GetIntegerSrv::Response> response)
 {
   (void)request;
+  if (!this->pylon_camera_)
+  {
+    response->success = false;
+    response->message = "Camera not connected";
+    return;
+  }
   int value = this->pylon_camera_->getMaxNumBuffer();
   if (value == -1 ) 
   {
@@ -2419,6 +2431,12 @@ void PylonROS2CameraNode::getStatisticTotalBufferCountCallback(const std::shared
                                                                std::shared_ptr<GetIntegerSrv::Response> response)
 {
   (void)request;
+  if (!this->pylon_camera_)
+  {
+    response->success = false;
+    response->message = "Camera not connected";
+    return;
+  }
   int value = this->pylon_camera_->getStatisticTotalBufferCount();
   if (value == -1 ) 
   {
@@ -2441,6 +2459,12 @@ void PylonROS2CameraNode::getStatisticFailedBufferCountCallback(const std::share
                                                                 std::shared_ptr<GetIntegerSrv::Response> response)
 {
   (void)request;
+  if (!this->pylon_camera_)
+  {
+    response->success = false;
+    response->message = "Camera not connected";
+    return;
+  }
   int value = this->pylon_camera_->getStatisticFailedBufferCount();
   if (value == -1 ) 
   {
@@ -2463,6 +2487,12 @@ void PylonROS2CameraNode::getStatisticBufferUnderrunCountCallback(const std::sha
                                                                   std::shared_ptr<GetIntegerSrv::Response> response)
 {
   (void)request;
+  if (!this->pylon_camera_)
+  {
+    response->success = false;
+    response->message = "Camera not connected";
+    return;
+  }
   int value = this->pylon_camera_->getStatisticBufferUnderrunCount();
   if (value == -1 )
   {
@@ -2485,6 +2515,12 @@ void PylonROS2CameraNode::getStatisticFailedPacketCountCallback(const std::share
                                                                 std::shared_ptr<GetIntegerSrv::Response> response)
 {
   (void)request;
+  if (!this->pylon_camera_)
+  {
+    response->success = false;
+    response->message = "Camera not connected";
+    return;
+  }
   int value = this->pylon_camera_->getStatisticFailedPacketCount();
   if (value == -1 )
   {
@@ -2507,6 +2543,12 @@ void PylonROS2CameraNode::getStatisticResendRequestCountCallback(const std::shar
                                                                  std::shared_ptr<GetIntegerSrv::Response> response)
 {
   (void)request;
+  if (!this->pylon_camera_)
+  {
+    response->success = false;
+    response->message = "Camera not connected";
+    return;
+  }
   int value = this->pylon_camera_->getStatisticResendRequestCount();
   if (value == -1 )
   {
@@ -2529,6 +2571,12 @@ void PylonROS2CameraNode::getStatisticMissedFrameCountCallback(const std::shared
                                                                std::shared_ptr<GetIntegerSrv::Response> response)
 {
   (void)request;
+  if (!this->pylon_camera_)
+  {
+    response->success = false;
+    response->message = "Camera not connected";
+    return;
+  }
   int value = this->pylon_camera_->getStatisticMissedFrameCount();
   if (value == -1 )
   {
@@ -2551,6 +2599,12 @@ void PylonROS2CameraNode::getStatisticResynchronizationCountCallback(const std::
                                                                      std::shared_ptr<GetIntegerSrv::Response> response)
 {
   (void)request;
+  if (!this->pylon_camera_)
+  {
+    response->success = false;
+    response->message = "Camera not connected";
+    return;
+  }
   int value = this->pylon_camera_->getStatisticResynchronizationCount();
   if (value == -1 )
   {
@@ -2573,6 +2627,12 @@ void PylonROS2CameraNode::getChunkModeActiveCallback(const std::shared_ptr<GetIn
                                                      std::shared_ptr<GetIntegerSrv::Response> response)
 {
   (void)request;
+  if (!this->pylon_camera_)
+  {
+    response->success = false;
+    response->message = "Camera not connected";
+    return;
+  }
   int value = this->pylon_camera_->getChunkModeActive();
   if (value >= 0 &&  value <= 1)
   {
@@ -2600,6 +2660,12 @@ void PylonROS2CameraNode::getChunkSelectorCallback(const std::shared_ptr<GetInte
                                                    std::shared_ptr<GetIntegerSrv::Response> response)
 {
   (void)request;
+  if (!this->pylon_camera_)
+  {
+    response->success = false;
+    response->message = "Camera not connected";
+    return;
+  }
   int value = pylon_camera_->getChunkSelector();
   if (value >= 1 &&  value <= 32)
   {
@@ -2627,6 +2693,12 @@ void PylonROS2CameraNode::getChunkEnableCallback(const std::shared_ptr<GetIntege
                                                  std::shared_ptr<GetIntegerSrv::Response> response)
 {
   (void)request;
+  if (!this->pylon_camera_)
+  {
+    response->success = false;
+    response->message = "Camera not connected";
+    return;
+  }
   int value = this->pylon_camera_->getChunkEnable();
   if (value >= 0 &&  value <= 1)
   {
@@ -2654,6 +2726,12 @@ void PylonROS2CameraNode::getChunkTimestampCallback(const std::shared_ptr<GetInt
                                                     std::shared_ptr<GetIntegerSrv::Response> response)
 {
   (void)request;
+  if (!this->pylon_camera_)
+  {
+    response->success = false;
+    response->message = "Camera not connected";
+    return;
+  }
   int64_t value = this->pylon_camera_->getChunkTimestamp();
   //std::cout << value << std::endl;
 
@@ -2690,6 +2768,12 @@ void PylonROS2CameraNode::getChunkLineStatusAllCallback(const std::shared_ptr<Ge
                                                         std::shared_ptr<GetIntegerSrv::Response> response)
 {
   (void)request;
+  if (!this->pylon_camera_)
+  {
+    response->success = false;
+    response->message = "Camera not connected";
+    return;
+  }
   int64_t value = this->pylon_camera_->getChunkLineStatusAll();
   //std::cout << value << std::endl;
 
@@ -2726,6 +2810,12 @@ void PylonROS2CameraNode::getChunkFramecounterCallback(const std::shared_ptr<Get
                                                        std::shared_ptr<GetIntegerSrv::Response> response)
 {
   (void)request;
+  if (!this->pylon_camera_)
+  {
+    response->success = false;
+    response->message = "Camera not connected";
+    return;
+  }
   int64_t value = this->pylon_camera_->getChunkFramecounter();
   //std::cout << value << std::endl;
 
@@ -2762,6 +2852,12 @@ void PylonROS2CameraNode::getChunkCounterValueCallback(const std::shared_ptr<Get
                                                        std::shared_ptr<GetIntegerSrv::Response> response)
 {
   (void)request;
+  if (!this->pylon_camera_)
+  {
+    response->success = false;
+    response->message = "Camera not connected";
+    return;
+  }
   int64_t value = this->pylon_camera_->getChunkCounterValue();
   //std::cout << value << std::endl;
 
@@ -2798,6 +2894,12 @@ void PylonROS2CameraNode::getChunkExposureTimeCallback(const std::shared_ptr<Get
                                                        std::shared_ptr<GetFloatSrv::Response> response)
 {
   (void)request;
+  if (!this->pylon_camera_)
+  {
+    response->success = false;
+    response->message = "Camera not connected";
+    return;
+  }
   float value = this->pylon_camera_->getChunkExposureTime();
   //std::cout << value << std::endl;
 
@@ -2919,7 +3021,14 @@ void PylonROS2CameraNode::setSleepingCallback(const std::shared_ptr<SetSleepingS
 void PylonROS2CameraNode::setWhiteBalanceCallback(const std::shared_ptr<SetWhiteBalanceSrv::Request> request,
                                                   std::shared_ptr<SetWhiteBalanceSrv::Response> response)
 {
-  try 
+  if (!this->pylon_camera_ || !this->pylon_camera_->isReady())
+  {
+    RCLCPP_WARN(LOGGER, "Error: pylon_camera_ is not ready!");
+    response->success = false;
+    response->message = "Camera not connected";
+    return;
+  }
+  try
   {
     response->message = this->pylon_camera_->setWhiteBalance(request->balance_ratio_red, request->balance_ratio_green, request->balance_ratio_blue);
     if (response->message == "done")
@@ -2940,6 +3049,13 @@ void PylonROS2CameraNode::setWhiteBalanceCallback(const std::shared_ptr<SetWhite
 void PylonROS2CameraNode::setActionTriggerConfigurationCallback(const std::shared_ptr<SetActionTriggerConfiguration::Request> request,
                                                                 std::shared_ptr<SetActionTriggerConfiguration::Response> response)
 {
+  if (!this->pylon_camera_ || !this->pylon_camera_->isReady())
+  {
+    RCLCPP_WARN(LOGGER, "Error: pylon_camera_ is not ready!");
+    response->success = false;
+    response->message = "Camera not connected";
+    return;
+  }
   response->message = this->pylon_camera_->setActionTriggerConfiguration(request->action_device_key, request->action_group_key, request->action_group_mask,
                                                                          request->registration_mode, request->cleanup);
 
@@ -3391,6 +3507,13 @@ void PylonROS2CameraNode::setTriggerTimeoutCallback(const std::shared_ptr<SetInt
 void PylonROS2CameraNode::setGrabbingStrategyCallback(const std::shared_ptr<SetIntegerSrv::Request> request,
                                                       std::shared_ptr<SetIntegerSrv::Response> response)
 {
+  if (!this->pylon_camera_ || !this->pylon_camera_->isReady())
+  {
+    RCLCPP_WARN(LOGGER, "Error: pylon_camera_ is not ready!");
+    response->success = false;
+    response->message = "Camera not connected";
+    return;
+  }
   // set 0 = GrabStrategy_OneByOne
   // set 1 = GrabStrategy_LatestImageOnly
   // set 2 = GrabStrategy_LatestImages
@@ -3416,6 +3539,13 @@ void PylonROS2CameraNode::setGrabbingStrategyCallback(const std::shared_ptr<SetI
 void PylonROS2CameraNode::setOutputQueueSizeCallback(const std::shared_ptr<SetIntegerSrv::Request> request,
                                                      std::shared_ptr<SetIntegerSrv::Response> response)
 {
+  if (!this->pylon_camera_ || !this->pylon_camera_->isReady())
+  {
+    RCLCPP_WARN(LOGGER, "Error: pylon_camera_ is not ready!");
+    response->success = false;
+    response->message = "Camera not connected";
+    return;
+  }
   this->grabbingStopping();
   response->message = this->pylon_camera_->setOutputQueueSize(request->value);
   this->grabbingStarting();
@@ -3433,6 +3563,13 @@ void PylonROS2CameraNode::setOutputQueueSizeCallback(const std::shared_ptr<SetIn
 void PylonROS2CameraNode::setMaxNumBufferCallback(const std::shared_ptr<SetIntegerSrv::Request> request,
                                                   std::shared_ptr<SetIntegerSrv::Response> response)
 {
+  if (!this->pylon_camera_ || !this->pylon_camera_->isReady())
+  {
+    RCLCPP_WARN(LOGGER, "Error: pylon_camera_ is not ready!");
+    response->success = false;
+    response->message = "Camera not connected";
+    return;
+  }
   response->message = this->pylon_camera_->setMaxNumBuffer(request->value);
 
   if (response->message.find("done") != std::string::npos)
@@ -4061,6 +4198,13 @@ void PylonROS2CameraNode::setGammaEnableCallback(const std::shared_ptr<SetBoolSr
 void PylonROS2CameraNode::setChunkModeActiveCallback(const std::shared_ptr<SetBoolSrv::Request> request,
                                                      std::shared_ptr<SetBoolSrv::Response> response)
 {
+  if (!this->pylon_camera_ || !this->pylon_camera_->isReady())
+  {
+    RCLCPP_WARN(LOGGER, "Error: pylon_camera_ is not ready!");
+    response->success = false;
+    response->message = "Camera not connected";
+    return;
+  }
   response->message = this->pylon_camera_->setChunkModeActive(request->data);
   if (response->message == "done")
   {
@@ -4079,6 +4223,13 @@ void PylonROS2CameraNode::setChunkModeActiveCallback(const std::shared_ptr<SetBo
 void PylonROS2CameraNode::setChunkEnableCallback(const std::shared_ptr<SetBoolSrv::Request> request,
                                                  std::shared_ptr<SetBoolSrv::Response> response)
 {
+  if (!this->pylon_camera_ || !this->pylon_camera_->isReady())
+  {
+    RCLCPP_WARN(LOGGER, "Error: pylon_camera_ is not ready!");
+    response->success = false;
+    response->message = "Camera not connected";
+    return;
+  }
   response->message = this->pylon_camera_->setChunkEnable(request->data);
   if (response->message == "done")
   {
@@ -4158,6 +4309,12 @@ void PylonROS2CameraNode::getPTPStatusCallback(const std::shared_ptr<GetPtpStatu
                                                  std::shared_ptr<GetPtpStatusSrv::Response> response)
 {
   (void)request;
+  if (!this->pylon_camera_)
+  {
+    response->success = false;
+    response->message = "Camera not connected";
+    return;
+  }
   int64_t offset_from_master;
   std::string status;
   std::string servo_status;
@@ -4368,6 +4525,12 @@ void PylonROS2CameraNode::getPfsCallback(const std::shared_ptr<GetStringSrv::Req
                                               std::shared_ptr<GetStringSrv::Response> response)
 {
   (void)request;
+  if (!this->pylon_camera_)
+  {
+    response->success = false;
+    response->message = "Camera not connected";
+    return;
+  }
   std::tie(response->message, response->value) = this->getPfs();
   if (response->message.find("done") != std::string::npos)
   {
@@ -4470,6 +4633,13 @@ void PylonROS2CameraNode::updateSyncFreeRunTimerCallback(const std::shared_ptr<T
                                                          std::shared_ptr<TriggerSrv::Response> response)
 {
   (void)request;
+  if (!this->pylon_camera_ || !this->pylon_camera_->isReady())
+  {
+    RCLCPP_WARN(LOGGER, "Error: pylon_camera_ is not ready!");
+    response->success = false;
+    response->message = "Camera not connected";
+    return;
+  }
   response->message = this->pylon_camera_->updateSyncFreeRunTimer();
   if (response->message.find("done") != std::string::npos)
   {
@@ -5228,7 +5398,7 @@ std::shared_ptr<GrabImagesAction::Result> PylonROS2CameraNode::grabRawImages(con
 std::string PylonROS2CameraNode::grabbingStarting()
 {  
   std::lock_guard<std::recursive_mutex> lock(this->grab_mutex_);
-  if (!this->pylon_camera_->isReady())
+  if (!this->pylon_camera_ || !this->pylon_camera_->isReady())
   {
     RCLCPP_WARN(LOGGER, "Error in grabbingStarting(): pylon_camera_ is not ready!");
     return "pylon camera is not ready!";
@@ -5246,7 +5416,7 @@ std::string PylonROS2CameraNode::grabbingStarting()
 std::string PylonROS2CameraNode::grabbingStopping()
 {  
   std::lock_guard<std::recursive_mutex> lock(this->grab_mutex_);
-  if (!this->pylon_camera_->isReady())
+  if (!this->pylon_camera_ || !this->pylon_camera_->isReady())
   {
     RCLCPP_WARN(LOGGER, "Error in grabbingStopping(): pylon_camera_ is not ready!");
     return "pylon camera is not ready!";
@@ -5288,7 +5458,7 @@ bool PylonROS2CameraNode::waitForCamera(const std::chrono::duration<double>& tim
 void PylonROS2CameraNode::publishCurrentParams()
 {
   std::lock_guard<std::recursive_mutex> lock(this->grab_mutex_);
-  if (!this->pylon_camera_->isReady())
+  if (!this->pylon_camera_ || !this->pylon_camera_->isReady())
   {
     RCLCPP_WARN(LOGGER, "Error in publishCurrentParams(): pylon_camera_ is not ready!");
     this->current_params_.message = "pylon camera is not ready!";

@@ -548,6 +548,12 @@ class WeChatQRNode(Node):
         now = time.monotonic()
         previous = self._last_published_at.get(info)
         self._last_published_at[info] = now
+        # 定期清理过期条目，防止字典无限增长
+        if len(self._last_published_at) > 100:
+            cutoff = now - self._deduplicate_window_s * 10
+            self._last_published_at = {
+                k: v for k, v in self._last_published_at.items() if v > cutoff
+            }
         return previous is None or now - previous >= self._deduplicate_window_s
 
     def compressed_image_callback(self, msg: CompressedImage):
@@ -560,7 +566,7 @@ class WeChatQRNode(Node):
 
         try:
             np_arr = np.frombuffer(msg.data, np.uint8)
-            cv_image = cv.imdecode(np_arr, cv.IMREAD_COLOR)
+            cv_image = cv.imdecode(np_arr, cv.IMREAD_GRAYSCALE)
             if cv_image is None:
                 self.get_logger().error('压缩图像解码失败')
                 return
@@ -611,12 +617,10 @@ class WeChatQRNode(Node):
             self._last_detect_time = now
 
         # ---- 步骤 1：ROS Image → OpenCV numpy 数组 ----
-        # imgmsg_to_cv2() 将序列化的 ROS 图像消息解码为内存中的像素矩阵
-        # desired_encoding='bgr8' 指定输出格式为 BGR 8位（OpenCV 默认格式）
-        #   B = 蓝通道, G = 绿通道, R = 红通道, 每通道 8 bit (0-255)
-        #   如果输入图像的编码不是 bgr8，CvBridge 会自动做色彩空间转换
+        # 使用 passthrough 保持原始编码（相机输出 mono8，无需转 bgr8）
+        # QR 检测算法基于灰度边缘/对比度，不需要彩色信息
         try:
-            cv_image = self.bridge.imgmsg_to_cv2(msg, desired_encoding='bgr8')
+            cv_image = self.bridge.imgmsg_to_cv2(msg, desired_encoding='passthrough')
         except Exception as e:
             # 可能的异常：图像编码不支持、数据损坏等
             self.get_logger().error(f'图像转换失败: {e}')

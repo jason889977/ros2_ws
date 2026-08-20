@@ -1,36 +1,39 @@
-# ROS2 Basler Camera + QR Detector + AprilTag Detector + Keyence Detector Workspace
+# ROS2 工业视觉工作区
 
-这是一个基于 ROS 2 Humble 的工业视觉工作区，当前生产基线为统一容器运行模式。
+基于 ROS 2 Humble 的工业视觉系统，集成 Basler GigE 相机、AprilTag 位姿检测、二维码识别和 Keyence 扫码器，支持单/双相机部署。
 
-## 当前项目状况（2026-08-20）
+## 核心特性
 
-- 标准运行模式：单容器 `basler_camera` 统一运行 Basler 相机、AprilTag、二维码和 Keyence 扫码链路。
-- 统一启动入口：`industrial_vision_bringup/vision_pipeline.launch.py`。
-- 部署形态：`deploy/basler_camera/docker-compose.yml` 使用 `network_mode: host`，默认镜像 `basler_camera_20260819_v2.0`。
-- 当前相机基线：`startup_user_set=Default`，`binning 2x2`，图像规格 `Mono8 1294x970`。
-- 关键输出接口（以 `camera_id=my_camera` 为例，所有输出按相机命名空间隔离）：
-  - `/{camera_id}/qr/decoded_info`（二维码识别结果）
-  - `/{camera_id}/apriltag/pose`、`/{camera_id}/apriltag/transform`（AprilTag 位姿/变换）
-  - `/{camera_id}/scanner/barcode`（Keyence 扫码结果）
-- 多相机支持：设置 `CAMERA_ID_2` 环境变量即可在同一容器内启动第二条独立 pipeline，每台相机可配置不同检测链路（`ENABLE_APRILTAG`/`ENABLE_QRCODE`/`ENABLE_KEYENCE`）。
-- 容器健康判据：以 `/{CAMERA_ID}/pylon_ros2_camera_node/camera_info` 的类型与消息可达为准（healthcheck 已落地）。
-- 验收口径：统一容器主流程以 `/{camera_id}/detections`、`/{camera_id}/apriltag/pose`、`/{camera_id}/qr/decoded_info` 可用为通过标准。
-- 兼容说明：统一容器模式为唯一生产路径，各模块独立容器配置保留但不再主动维护。
+- **统一容器部署**：单 Docker 容器运行全部检测链路，一键启动
+- **模块化检测链**：AprilTag / QR / Keyence 可独立启用/禁用（`enable_apriltag` / `enable_qrcode` / `enable_keyence`）
+- **多相机支持**：同一容器内运行两条独立 pipeline，每台相机可配不同检测链路，输出话题按 `camera_id` 命名空间隔离
+- **零拷贝图像传输**：C++ 节点（camera + apriltag_ros）运行在 `ComposableNodeContainer` 中，启用 intra-process 零拷贝
+- **压缩图像优化**：Python 节点通过 `image_transport` compressed 流消费图像，降低 DDS 带宽
+- **自动重连**：Keyence TCP 连接带定时重连 + 线程安全保护
+- **节点自动恢复**：所有节点配置 `respawn=True`，崩溃后自动重启
+- **诊断集成**：Keyence / AprilTag 节点通过 `diagnostic_updater` 上报状态
 
-详见：
-- `项目启动运行指南/工控机ROS2集成与调用超详细指南.md`
-- `handover_ros2_integration_2026-08-07/00-交接总览.md`
-- `handover_ros2_integration_2026-08-07/02-启动与运行SOP.md`
-- `handover_ros2_integration_2026-08-07/03-测试方法与验收标准.md`
+## 目录结构
 
-## 目录说明
+```
+src/
+├── pylon_ros2_camera_interfaces/   # 自定义消息/服务/动作定义
+├── pylon_ros2_camera_component/    # Basler pylon 相机核心驱动 (C++)
+├── pylon_ros2_camera_wrapper/      # 相机启动包装 + 配置/标定文件
+├── industrial_vision_bringup/      # 统一 pipeline launch 入口
+├── qrcode_detector/                # 二维码检测（WeChatQR + OpenCV fallback）
+├── apriltag_pose_reader/           # AprilTag 位姿解算与转发
+└── keyence_sr_wrapper/             # Keyence SR 扫码器 TCP 包装
 
-- `src/pylon_ros2_camera_component`: Basler pylon 相机核心组件
-- `src/pylon_ros2_camera_wrapper`: 相机 ROS2 包装与 launch/config
-- `src/qrcode_detector`: 二维码检测节点与模型
-- `src/apriltag_pose_reader`: AprilTag TF/姿态读取封装与 launch
-- `scripts`: 部署、迁移、RViz 启动等脚本
-- `handover_ros2_integration_2026-08-07`: 中文交接与运行 SOP
+deploy/
+├── basler_camera/                  # 统一容器 Dockerfile + compose + healthcheck
+├── qrcode_detector/                # 独立 QR 容器（遗留，非生产主路径）
+├── apriltag_pose_reader/           # 独立 AprilTag 容器（遗留）
+└── keyence_sr_wrapper/             # 独立 Keyence 容器（遗留）
+
+scripts/                            # 部署、标定、RViz 脚本
+项目启动运行指南/                    # 中文文档（SOP、故障排查、交接文档）
+```
 
 ## 系统架构
 
@@ -98,140 +101,135 @@ graph LR
 - Ubuntu 22.04 LTS (x86_64)
 - ROS 2 Humble
 - Basler pylon SDK 8.0.0
-- Python 3.10
-- NumPy 1.26.4
-- opencv-contrib-python-headless 4.8.1.78
-
-新 PC 首次部署请执行：
-
-先按 ROS 官方文档配置 Humble apt 软件源，然后运行：
-
-```bash
-cd /home/ubuntu/ros2_ws
-bash install_dependencies.sh
-```
-
-完整软件表、手工安装步骤和验收标准见
-`handover_ros2_integration_2026-08-07/06-组件与依赖安装详单.md`。
+- Python 3.10 / NumPy 1.26.4 / opencv-contrib-python-headless 4.8.1.78
+- Docker + Docker Compose（生产部署）
 
 ## 快速启动
 
-每个终端先执行：
+### 方式一：Docker 一键启动（推荐，生产模式）
+
+```bash
+# 1. 配置环境变量
+cp deploy/basler_camera/.env.example deploy/basler_camera/.env
+# 编辑 .env，设置 CAMERA_ID、CAMERA_CONFIG_FILE 等
+
+# 2. 构建镜像（首次或代码变更后）
+docker build -f deploy/basler_camera/Dockerfile -t basler_camera_20260819_v2.0 .
+
+# 3. 启动
+docker compose --env-file deploy/basler_camera/.env \
+  -f deploy/basler_camera/docker-compose.yml up -d
+
+# 4. 验证
+docker logs basler_camera --tail 20
+docker exec basler_camera /opt/ros2_ws/deploy/basler_camera/healthcheck.sh
+```
+
+### 方式二：双相机启动
+
+编辑 `deploy/basler_camera/.env`：
+
+```bash
+# 相机 1：只跑 QR
+CAMERA_ID=cam1
+ENABLE_QRCODE=true
+ENABLE_APRILTAG=false
+ENABLE_KEYENCE=false
+
+# 相机 2：只跑 AprilTag
+CAMERA_ID_2=cam2
+ENABLE_QRCODE=false
+ENABLE_APRILTAG=true
+ENABLE_KEYENCE=false
+```
+
+然后正常 `docker compose up -d`，entrypoint 会自动检测 `CAMERA_ID_2` 并启动第二条 pipeline。
+
+### 方式三：手动 launch（开发调试用）
 
 ```bash
 cd /home/ubuntu/ros2_ws
 source /opt/ros/humble/setup.bash
 source install/setup.bash
+
+# 全链路启动（单相机）
+ros2 launch industrial_vision_bringup vision_pipeline.launch.py
+
+# 自定义相机 ID + 只启用部分模块
+ros2 launch industrial_vision_bringup vision_pipeline.launch.py \
+  camera_id:=cam1 \
+  enable_apriltag:=true \
+  enable_qrcode:=false \
+  enable_keyence:=false
 ```
 
-### 1. 启动相机
+### 验证链路
 
 ```bash
-ros2 launch pylon_ros2_camera_wrapper pylon_ros2_camera.launch.py \
-  config_file:=/home/ubuntu/ros2_ws/src/pylon_ros2_camera_wrapper/config/aca2500_106611_18.tuned_v3.yaml
+# 相机出图
+ros2 topic hz /{camera_id}/pylon_ros2_camera_node/image_raw
+
+# 检测结果
+ros2 topic echo /{camera_id}/qr/decoded_info --once
+ros2 topic echo /{camera_id}/apriltag/pose --once
+ros2 topic echo /{camera_id}/scanner/barcode --once
 ```
 
-### 2. 启动二维码节点
+## ROS 2 接口一览
+
+| 话题 | 类型 | 说明 |
+|------|------|------|
+| `/{cam}/pylon_ros2_camera_node/image_raw` | `sensor_msgs/msg/Image` | 相机原始图像 |
+| `/{cam}/pylon_ros2_camera_node/camera_info` | `sensor_msgs/msg/CameraInfo` | 相机内参 |
+| `/{cam}/pylon_ros2_camera_node/status` | `ComponentStatus` | 相机状态 |
+| `/{cam}/apriltag/pose` | `geometry_msgs/msg/PoseStamped` | AprilTag 位姿 |
+| `/{cam}/apriltag/transform` | `geometry_msgs/msg/TransformStamped` | AprilTag 变换 |
+| `/{cam}/qr/decoded_info` | `std_msgs/msg/String` | 二维码解码结果 |
+| `/{cam}/scanner/barcode` | `std_msgs/msg/String` | Keyence 扫码结果 |
+
+| 服务 | 类型 | 说明 |
+|------|------|------|
+| `/{cam}/scanner/trigger` | `std_srvs/srv/Trigger` | 触发 Keyence 单次扫码 |
+
+## 诊断与监控
+
+节点通过 `/diagnostics` 话题上报运行状态：
 
 ```bash
-ros2 launch qrcode_detector qrcode_detector.launch.py
+# 查看所有诊断信息
+ros2 topic echo /diagnostics --once
+
+# 重点关注
+# - "Scanner Connection": Keyence 连接状态 + 扫码/错误计数
+# - "AprilTag Status": 检测计数 + 当前跟踪的标签帧
 ```
 
-也可以使用一键脚本（仅相机 + 二维码）：
-
-```bash
-# 默认复用已有相机节点
-./scripts/deploy_and_run_camera_qr.sh
-
-# 先自动停掉旧相机，再拉起新相机和二维码节点
-CAMERA_MODE=restart ./scripts/deploy_and_run_camera_qr.sh
-```
-
-### 3. 启动 AprilTag 姿态读取
-
-```bash
-ros2 launch apriltag_pose_reader apriltag_pose_reader.launch.py
-```
-
-也可以使用一键脚本（仅相机 + AprilTag）：
-
-```bash
-# 默认复用已有相机节点
-./scripts/deploy_and_run_camera_apriltag.sh
-
-# 先自动停掉旧相机，再拉起新相机和 AprilTag
-CAMERA_MODE=restart ./scripts/deploy_and_run_camera_apriltag.sh
-```
-
-默认会同时启动官方 `apriltag_ros` 检测节点，并把 TF 里的 AprilTag 姿态转成：
-
-- `/apriltag/pose`，类型为 `geometry_msgs/msg/PoseStamped`
-- `/apriltag/transform`，类型为 `geometry_msgs/msg/TransformStamped`
-
-如果你已经单独启动了官方 AprilTag 检测节点，可以把 `start_detector:=false`，只保留姿态读取器。
-
-如果日志出现 "The camera is not calibrated"，可执行一键标定并自动落盘：
-
-```bash
-./scripts/calibrate_basler_camera_and_apply.sh
-```
-
-### 4. 验证链路
-
-```bash
-ros2 node list
-ros2 topic info -v /my_camera/pylon_ros2_camera_node/image_raw
-ros2 topic echo /wechat_qr_node/decoded_info --once
-ros2 topic echo /apriltag/pose --once
-```
-
-### 5. 打开 RViz 查看图像
-
-```bash
-/home/ubuntu/ros2_ws/scripts/open_camera_rviz.sh
-```
+相机健康判据：`/{CAMERA_ID}/pylon_ros2_camera_node/camera_info` 话题类型正确且消息可达。
 
 ## 文档入口
 
-- 工控机集成与调用超详细指南：`项目启动运行指南/工控机ROS2集成与调用超详细指南.md`
-- 中文启动 SOP：`handover_ros2_integration_2026-08-07/02-启动与运行SOP.md`
-- 新 PC 依赖安装：`handover_ros2_integration_2026-08-07/06-组件与依赖安装详单.md`
-- Basler 安装说明：`BASLER_INSTALL_GUIDE.md`
+| 文档 | 路径 |
+|------|------|
+| 故障排查手册 | `项目启动运行指南/故障排查手册.md` |
+| 工控机集成指南 | `项目启动运行指南/工控机ROS2集成与调用超详细指南.md` |
+| 启动与运行 SOP | `项目启动运行指南/handover_ros2_integration_2026-08-07/02-启动与运行SOP.md` |
+| 测试验收标准 | `项目启动运行指南/handover_ros2_integration_2026-08-07/03-测试方法与验收标准.md` |
+| 依赖安装详单 | `项目启动运行指南/handover_ros2_integration_2026-08-07/06-组件与依赖安装详单.md` |
+| 模块交付摘要 | `deploy/DELIVERY_SUMMARY.md` |
 
 ## GitHub 仓库
-
-当前工作区已同步到两个远程仓库：
 
 - 个人仓库：`origin` -> https://github.com/jason889977/ros2_ws
 - 组织仓库：`org` -> https://github.com/industrialnext-ai-dd/ros2_ws
 
-查看远程：
-
 ```bash
-git remote -v
-```
-
-常规提交流程：
-
-```bash
-git add .
-git commit -m "your message"
-git push
-```
-
-同时同步个人仓库与组织仓库：
-
-```bash
-git sync-all
-```
-
-如果只想单独推送组织仓库：
-
-```bash
-git push org main
+git remote -v          # 查看远程
+git push               # 推送到个人仓库
+git push org main      # 同步到组织仓库
 ```
 
 ## 备注
 
-- `build/`、`install/`、`log/` 已通过 `.gitignore` 忽略，不会提交到 GitHub。
-- `main` 当前默认跟踪个人仓库 `origin/main`。
+- `build/`、`install/`、`log/` 已通过 `.gitignore` 忽略
+- `main` 默认跟踪个人仓库 `origin/main`
+- 统一容器模式为唯一生产路径，各模块独立容器配置保留但不再主动维护

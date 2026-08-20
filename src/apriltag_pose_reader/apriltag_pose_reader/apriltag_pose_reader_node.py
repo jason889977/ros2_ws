@@ -36,7 +36,7 @@ import rclpy
 # rclpy 是 ROS 2 的 Python 客户端库，提供节点创建、消息发布/订阅等核心功能
 
 from diagnostic_updater import DiagnosticStatusWrapper, Updater
-from rclpy.executors import ExternalShutdownException
+from rclpy.executors import ExternalShutdownException, MultiThreadedExecutor
 from rclpy.node import Node
 # Node 是 ROS 2 节点的基类，所有自定义节点都需要继承它
 
@@ -178,6 +178,8 @@ class AprilTagPoseReader(Node):
         # 每当检测到新标签时更新
 
         self._tag_last_seen: dict[str, float] = {}
+        self._candidate_cache: Optional[Set[str]] = None
+        self._candidate_cache_dirty = True
 
         self._latest_frame_hint: Optional[str] = None
         # 最近一次检测到的标签坐标系名称，用于自动推断要跟踪的目标
@@ -303,18 +305,31 @@ class AprilTagPoseReader(Node):
             return {self._tag_frame_id}
         if self._tag_family and self._tag_id >= 0:
             return {f'{self._tag_family}:{self._tag_id}'}
+        if not self._candidate_cache_dirty and self._candidate_cache is not None:
+            return self._candidate_cache
         if self._tag_timeout_s > 0.0:
             now = time.monotonic()
             self._known_tag_frames = {
                 frame_id for frame_id in self._known_tag_frames
                 if now - self._tag_last_seen.get(frame_id, 0.0) <= self._tag_timeout_s
             }
+            # 同步清理 _tag_last_seen 字典，防止无限增长
+            self._tag_last_seen = {
+                frame_id: ts for frame_id, ts in self._tag_last_seen.items()
+                if now - ts <= self._tag_timeout_s
+            }
         if self._publish_all_tags:
-            return set(self._known_tag_frames)
+            self._candidate_cache = set(self._known_tag_frames)
+            self._candidate_cache_dirty = False
+            return self._candidate_cache
         if self._latest_frame_hint in self._known_tag_frames:
-            return {self._latest_frame_hint}
+            self._candidate_cache = {self._latest_frame_hint}
+            self._candidate_cache_dirty = False
+            return self._candidate_cache
         self._latest_frame_hint = None
-        return set(self._known_tag_frames)
+        self._candidate_cache = set(self._known_tag_frames)
+        self._candidate_cache_dirty = False
+        return self._candidate_cache
 
     def _publish_transform(self, transform: TransformStamped) -> None:
         """
@@ -379,6 +394,7 @@ class AprilTagPoseReader(Node):
             self._tag_last_seen[frame_id] = time.monotonic()
             # 更新最新提示
             self._latest_frame_hint = frame_id
+            self._candidate_cache_dirty = True
             if self._publish_detection_logs:
                 # 打印检测详情：
                 # - family:         标签族（如 tag36h11）
@@ -495,30 +511,30 @@ class AprilTagPoseReader(Node):
         stat.add('candidate_frames', frames)
         return stat
 
+    def destroy_node(self) -> None:
+        """显式清理 TF listener 和订阅，防止后台线程泄漏。"""
+        if hasattr(self, '_tf_listener'):
+            del self._tf_listener
+        if hasattr(self, '_tf_buffer'):
+            del self._tf_buffer
+        super().destroy_node()
+
 
 # ============================================================================
 # 节点入口函数
 # ============================================================================
 
 def main(args=None) -> None:
-    """
-    节点主入口函数。
-
-    执行流程：
-      1. rclpy.init()      — 初始化 ROS 2 通信系统（必须在使用任何 ROS 功能前调用）
-      2. AprilTagPoseReader() — 创建节点实例（触发 __init__ 中的所有初始化逻辑）
-      3. rclpy.spin(node)  — 进入事件循环，等待回调触发（订阅消息、定时器等）
-                             spin 会阻塞在此处，直到节点被关闭
-      4. destroy_node()    — 清理节点资源（取消订阅、释放发布器等）
-      5. rclpy.shutdown()  — 关闭 ROS 2 通信系统
-    """
     rclpy.init(args=args)
     node = AprilTagPoseReader()
+    executor = MultiThreadedExecutor()
+    executor.add_node(node)
     try:
-        rclpy.spin(node)
+        executor.spin()
     except (KeyboardInterrupt, ExternalShutdownException):
         pass
     finally:
+        executor.shutdown()
         node.destroy_node()
         if rclpy.ok():
             rclpy.shutdown()
