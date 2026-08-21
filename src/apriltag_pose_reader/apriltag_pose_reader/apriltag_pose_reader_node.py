@@ -41,6 +41,7 @@ from rclpy.node import Node
 # Node 是 ROS 2 节点的基类，所有自定义节点都需要继承它
 
 from geometry_msgs.msg import PoseStamped, TransformStamped
+from diagnostic_msgs.msg import DiagnosticStatus
 # PoseStamped:       带时间戳和坐标系的位姿消息（位置 xyz + 四元数姿态 xyzw）
 # TransformStamped:  带时间戳的坐标变换消息（父坐标系 → 子坐标系的平移 + 旋转）
 
@@ -243,7 +244,7 @@ class AprilTagPoseReader(Node):
         # ---- Diagnostics ----
         self._diag_updater = Updater(self)
         self._diag_updater.setHardwareID('apriltag')
-        self._diag_updater.addFunction('AprilTag Status', self._diag_status)
+        self._diag_updater.add('AprilTag Status', self._diag_status)
 
     # ======================================================================
     # 辅助方法
@@ -532,9 +533,9 @@ class AprilTagPoseReader(Node):
     def _diag_status(self, stat: DiagnosticStatusWrapper) -> DiagnosticStatusWrapper:
         """Diagnostic task: report AprilTag detection and transform statistics."""
         if self._detections_seen > 0:
-            stat.summary(0, 'Detecting tags')
+            stat.summary(DiagnosticStatus.OK, 'Detecting tags')
         else:
-            stat.summary(1, 'No detections yet')
+            stat.summary(DiagnosticStatus.WARN, 'No detections yet')
         frames = ','.join(sorted(self._candidate_frames())) or '<none>'
         stat.add('detections_seen', str(self._detections_seen))
         stat.add('transforms_published', str(self._transforms_published))

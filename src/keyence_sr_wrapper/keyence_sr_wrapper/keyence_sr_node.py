@@ -10,6 +10,7 @@ from rclpy.executors import ExternalShutdownException, MultiThreadedExecutor
 from rclpy.node import Node
 from rclpy.parameter import Parameter
 from std_msgs.msg import String
+from diagnostic_msgs.msg import DiagnosticStatus
 from std_srvs.srv import Trigger
 from diagnostic_updater import DiagnosticStatusWrapper, Updater
 from rcl_interfaces.msg import SetParametersResult
@@ -80,7 +81,7 @@ class KeyenceSRNode(Node):
         # ---- Diagnostics ----
         self._diag_updater = Updater(self)
         self._diag_updater.setHardwareID('keyence_sr')
-        self._diag_updater.addFunction('Scanner Connection', self._diag_connection)
+        self._diag_updater.add('Scanner Connection', self._diag_connection)
         self._scan_count = 0
         self._error_count = 0
 
@@ -189,9 +190,12 @@ class KeyenceSRNode(Node):
     def _diag_connection(self, stat: DiagnosticStatusWrapper) -> DiagnosticStatusWrapper:
         """Diagnostic task: report scanner connection and scan statistics."""
         if self.client_socket is not None:
-            stat.summary(0, f'Connected to {self.scanner_ip}:{self.scanner_port}')
+            stat.summary(
+                DiagnosticStatus.OK,
+                f'Connected to {self.scanner_ip}:{self.scanner_port}'
+            )
         else:
-            stat.summary(2, 'Disconnected')
+            stat.summary(DiagnosticStatus.ERROR, 'Disconnected')
         stat.add('scanner_ip', self.scanner_ip)
         stat.add('scanner_port', str(self.scanner_port))
         stat.add('scan_count', str(self._scan_count))

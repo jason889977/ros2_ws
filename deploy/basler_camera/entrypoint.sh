@@ -4,6 +4,41 @@ set -eo pipefail
 source /opt/ros/humble/setup.bash
 source /opt/ros2_ws/install/setup.bash
 
+resolve_startup_timeout_s() {
+  local raw_timeout="${CAMERA_STARTUP_TIMEOUT_S:-120}"
+  if ! [[ "$raw_timeout" =~ ^[0-9]+$ ]] || (( raw_timeout <= 0 )); then
+    echo "[entrypoint] CAMERA_STARTUP_TIMEOUT_S must be a positive integer (seconds), got: ${raw_timeout}" >&2
+    exit 64
+  fi
+  echo "$raw_timeout"
+}
+
+wait_for_camera_ready() {
+  local camera_id="$1"
+  local launch_pid="$2"
+  local timeout_s="$3"
+  local topic="/${camera_id}/pylon_ros2_camera_node/camera_info"
+  local deadline=$((SECONDS + timeout_s))
+
+  while (( SECONDS < deadline )); do
+    if ! kill -0 "$launch_pid" 2>/dev/null; then
+      wait "$launch_pid" 2>/dev/null || true
+      echo "[entrypoint] Pipeline process exited before ${topic} became available." >&2
+      return 2
+    fi
+
+    if timeout 3 ros2 topic echo "$topic" --once >/dev/null 2>&1; then
+      echo "[entrypoint] Camera ready on topic: ${topic}"
+      return 0
+    fi
+
+    sleep 1
+  done
+
+  echo "[entrypoint] Camera startup timeout (${timeout_s}s): ${topic} has no data. Possible causes: camera unavailable or occupied by another application." >&2
+  return 1
+}
+
 # ---------------------------------------------------------------------------
 # Legacy single-camera launch (pylon_ros2_camera.launch.py)
 # ---------------------------------------------------------------------------
@@ -20,6 +55,7 @@ fi
 # Unified vision pipeline — supports dual-camera via CAMERA_ID_2
 # ---------------------------------------------------------------------------
 if [[ "${*}" == *"vision_pipeline.launch.py"* ]]; then
+  STARTUP_TIMEOUT_S="$(resolve_startup_timeout_s)"
   CAM1_ID="${CAMERA_ID:-my_camera}"
   CAM1_CONFIG="${CAMERA_CONFIG_FILE:-/opt/ros2_ws/deploy/basler_camera/config/aca2500_106611_18.yaml}"
 
@@ -83,6 +119,12 @@ if [[ "${*}" == *"vision_pipeline.launch.py"* ]]; then
       wait "$PID1" "$PID2" 2>/dev/null || true
     }
     trap _cleanup EXIT INT TERM
+    if ! wait_for_camera_ready "$CAM1_ID" "$PID1" "$STARTUP_TIMEOUT_S"; then
+      exit 70
+    fi
+    if ! wait_for_camera_ready "$CAMERA_ID_2" "$PID2" "$STARTUP_TIMEOUT_S"; then
+      exit 70
+    fi
     # 任一路流水线退出时立即结束另一条，避免故障被仍在运行的子进程遮蔽。
     set +e
     wait -n "$PID1" "$PID2"
@@ -97,7 +139,15 @@ if [[ "${*}" == *"vision_pipeline.launch.py"* ]]; then
     exit "$PIPELINE_EXIT"
   else
     echo "[entrypoint] Launching single-camera pipeline: $CAM1_ID"
-    exec ros2 launch industrial_vision_bringup vision_pipeline.launch.py "${CAM1_ARGS[@]}"
+    ros2 launch industrial_vision_bringup vision_pipeline.launch.py "${CAM1_ARGS[@]}" &
+    PID1=$!
+    if ! wait_for_camera_ready "$CAM1_ID" "$PID1" "$STARTUP_TIMEOUT_S"; then
+      kill "$PID1" 2>/dev/null || true
+      wait "$PID1" 2>/dev/null || true
+      exit 70
+    fi
+    wait "$PID1"
+    exit $?
   fi
   exit 0
 fi

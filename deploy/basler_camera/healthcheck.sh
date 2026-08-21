@@ -25,25 +25,39 @@ check_modules() {
   local enable_qrcode="$3"
   local enable_keyence="$4"
   local module_namespace="/${camera_id}"
+  local wait_timeout_s=8
+
+  wait_for_node() {
+    local target_node="$1"
+    local elapsed=0
+    while (( elapsed < wait_timeout_s )); do
+      if ros2 node list 2>/dev/null | grep -Fxq "$target_node"; then
+        return 0
+      fi
+      sleep 1
+      elapsed=$((elapsed + 1))
+    done
+    return 1
+  }
 
   # An enabled module is required for this pipeline to be healthy. Compose's
   # start period absorbs normal respawn/startup delay before health is checked.
   if [[ "$enable_apriltag" == "true" ]]; then
-    if ! ros2 node list 2>/dev/null | grep -Fxq "${module_namespace}/apriltag_pose_reader"; then
+    if ! wait_for_node "${module_namespace}/apriltag_pose_reader"; then
       echo "${camera_id}: apriltag_pose_reader not running" >&2
       return 1
     fi
   fi
 
   if [[ "$enable_qrcode" == "true" ]]; then
-    if ! ros2 node list 2>/dev/null | grep -Fxq "${module_namespace}/wechat_qr_node"; then
+    if ! wait_for_node "${module_namespace}/wechat_qr_node"; then
       echo "${camera_id}: wechat_qr_node not running" >&2
       return 1
     fi
   fi
 
   if [[ "$enable_keyence" == "true" ]]; then
-    if ! ros2 node list 2>/dev/null | grep -Fxq "${module_namespace}/keyence_sr_node"; then
+    if ! wait_for_node "${module_namespace}/keyence_sr_node"; then
       echo "${camera_id}: keyence_sr_node not running" >&2
       return 1
     fi

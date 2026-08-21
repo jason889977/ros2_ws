@@ -21,7 +21,9 @@ docker compose --env-file deploy/basler_camera/.env \
 
 双相机模式需同时设置 `CAMERA_ID_2` 与 `CAMERA_CONFIG_2`；第二路 ID 和配置文件
 都必须与第一路不同。统一 pipeline 中 `SCANNER_PORT` 必须为 $1$ 至 $65535$ 的整数，
-`RECONNECT_INTERVAL_S` 必须为有限且不小于 $0$ 的数值。
+`RECONNECT_INTERVAL_S` 必须为有限且不小于 $0$ 的数值。`CAMERA_STARTUP_TIMEOUT_S`
+为容器启动阶段等待 `/{camera_id}/pylon_ros2_camera_node/camera_info` 的最大秒数；
+超时会直接退出容器并报错（用于处理相机被占用或未连接场景）。
 
 ## 验收
 
