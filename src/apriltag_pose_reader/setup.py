@@ -27,6 +27,10 @@ setup(
     entry_points={
         'console_scripts': [
             'apriltag_pose_reader = apriltag_pose_reader.apriltag_pose_reader_node:main',
+            'apriltag_calibration = apriltag_pose_reader.aprilgrid_calibration:main',
+            'apriltag_capture = apriltag_pose_reader.aprilgrid_capture:main',
+            'apriltag_pipeline = apriltag_pose_reader.aprilgrid_pipeline:main',
+            'xarm_handeye_capture = apriltag_pose_reader.xarm_handeye_capture:main',
         ],
     },
 )

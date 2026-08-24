@@ -43,3 +43,13 @@
 - 通过 `/apriltag/transform` 可得到父子坐标系关系
 
 实际父子 frame 由 TF 中的 `header.frame_id` 和 `child_frame_id` 确定。
+
+## 手眼标定
+
+当前相机为末端固定的 `eye_in_hand` 结构。离线手眼程序输出固定的 `gripper -> camera` 安装变换；机器人状态 TF 提供动态的 `base -> gripper`，运行时组合为：
+
+```text
+base -> camera = (base -> gripper) * (gripper -> camera)
+```
+
+手眼标定程序和 CSV 格式见 `scripts/handeye_calibrate.py` 与 `scripts/CALIBRATION_AUTOMATION.md`。

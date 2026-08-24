@@ -13,3 +13,10 @@ apriltag:
       refine: true
       sharpening: 0.25
       debug: false
+    calibration_board:
+      rows: 4
+      cols: 3
+      tag_size_m: 0.05
+      tag_spacing_m: 0.01
+      tag_family: tag36h11
+      notes: "AprilGrid board: 4x3 tags, 50mm tag edge, 10mm gap between tag borders, family tag36h11."
