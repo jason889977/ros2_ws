@@ -34,16 +34,17 @@ Blaze 专用话题仅适用于 Blaze 设备，本模块目标设备 `acA2500-14g
 - `~/get_statistic_failed_packet_count` -> `pylon_ros2_camera_interfaces/srv/GetIntegerValue`
 - `~/get_statistic_missed_frame_count` -> `pylon_ros2_camera_interfaces/srv/GetIntegerValue`
 
-完整服务集合以 `ros2 service list -t` 和 `src/pylon_ros2_camera_component/src/pylon_ros2_camera_node.cpp` 为准。模块不提供 Action。
+完整服务集合以 `ros2 service list -t` 和 `src/pylon_ros2_camera_component/src/pylon_ros2_camera_node.cpp` 为准。相机还提供抓图 Action，具体名称以 `ros2 action list -t` 为准。
 
 ## TF
 
 相机驱动不主动发布 TF。图像消息使用配置中的 frame：`basler_aca2500_106611_18`。
 
-AprilTag 可选链路由 `apriltag_pose_reader` 发布：
+统一 pipeline 中，AprilTag 可选链路由 `apriltag_pose_reader` 发布：
 
-- `/apriltag/pose` -> `geometry_msgs/msg/PoseStamped`
-- `/apriltag/transform` -> `geometry_msgs/msg/TransformStamped`
+- `/my_camera/apriltag/pose` -> `geometry_msgs/msg/PoseStamped`
+- `/my_camera/apriltag/transform` -> `geometry_msgs/msg/TransformStamped`
 - 输入 `/tf` -> `tf2_msgs/msg/TFMessage`
 
-实际父子坐标系取决于 AprilTag 和 TF 配置，应以 `/apriltag/transform` 的 `header.frame_id` 与 `child_frame_id` 为准。
+实际父子坐标系取决于 AprilTag 和 TF 配置，应以 `/my_camera/apriltag/transform` 的 `header.frame_id` 与 `child_frame_id` 为准。修改 `camera_id` 时，将上述 `/my_camera` 替换为对应命名空间。
+统一 pipeline 中 child frame 按相机隔离，例如默认相机为 `my_camera/tag36h11:3`；双相机不会共用同一个 tag child frame。

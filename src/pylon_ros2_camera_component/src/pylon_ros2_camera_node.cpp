@@ -134,6 +134,17 @@ PylonROS2CameraNode::~PylonROS2CameraNode()
     this->spin_thread_.join();
   }
 
+  {
+    std::lock_guard<std::mutex> lock(this->action_threads_mutex_);
+    for (auto& action_thread : this->action_threads_)
+    {
+      if (action_thread.joinable())
+      {
+        action_thread.join();
+      }
+    }
+  }
+
   if (this->img_rect_pub_)
   {
     delete this->img_rect_pub_;
@@ -3100,6 +3111,12 @@ void PylonROS2CameraNode::setActionTriggerConfigurationCallback(const std::share
 void PylonROS2CameraNode::issueActionCommandCallback(const std::shared_ptr<IssueActionCommand::Request> request,
                                                      std::shared_ptr<IssueActionCommand::Response> response)
 {
+  if (!this->pylon_camera_ || !this->pylon_camera_->isReady())
+  {
+    response->success = false;
+    response->message = "Camera not connected";
+    return;
+  }
   response->message = this->pylon_camera_->issueActionCommand(request->device_key, request->group_key, request->group_mask, request->broadcast_address);
 
   if (response->message.find("done") != std::string::npos)
@@ -3115,6 +3132,12 @@ void PylonROS2CameraNode::issueActionCommandCallback(const std::shared_ptr<Issue
 void PylonROS2CameraNode::issueScheduledActionCommandCallback(const std::shared_ptr<IssueScheduledActionCommand::Request> request,
                                                               std::shared_ptr<IssueScheduledActionCommand::Response> response)
 {
+  if (!this->pylon_camera_ || !this->pylon_camera_->isReady())
+  {
+    response->success = false;
+    response->message = "Camera not connected";
+    return;
+  }
   response->message = this->pylon_camera_->issueScheduledActionCommand(request->device_key, request->group_key, request->group_mask, request->action_time_ns_from_current_timestamp, request->broadcast_address);
 
   if (response->message.find("done") != std::string::npos)
@@ -4700,7 +4723,9 @@ void PylonROS2CameraNode::handleGrabRawImagesActionGoalAccepted(const std::share
 
   using namespace std::placeholders;
   // this needs to return quickly to avoid blocking the executor, so spin up a new thread
-  std::thread{std::bind(&PylonROS2CameraNode::executeGrabRawImagesAction, this, _1), goal_handle}.detach();
+  std::lock_guard<std::mutex> lock(this->action_threads_mutex_);
+  this->action_threads_.emplace_back(
+    std::bind(&PylonROS2CameraNode::executeGrabRawImagesAction, this, _1), goal_handle);
 }
 
 void PylonROS2CameraNode::executeGrabRawImagesAction(const std::shared_ptr<GrabImagesGoalHandle> goal_handle)
@@ -4734,7 +4759,9 @@ void PylonROS2CameraNode::handleGrabRectImagesActionGoalAccepted(const std::shar
 
   using namespace std::placeholders;
   // this needs to return quickly to avoid blocking the executor, so spin up a new thread
-  std::thread{std::bind(&PylonROS2CameraNode::executeGrabRectImagesAction, this, _1), goal_handle}.detach();
+  std::lock_guard<std::mutex> lock(this->action_threads_mutex_);
+  this->action_threads_.emplace_back(
+    std::bind(&PylonROS2CameraNode::executeGrabRectImagesAction, this, _1), goal_handle);
 }
 
 void PylonROS2CameraNode::executeGrabRectImagesAction(const std::shared_ptr<GrabImagesGoalHandle> goal_handle)
@@ -4817,7 +4844,9 @@ void PylonROS2CameraNode::handleGrabBlazeDataActionGoalAccepted(const std::share
 
   using namespace std::placeholders;
   // this needs to return quickly to avoid blocking the executor, so spin up a new thread
-  std::thread{std::bind(&PylonROS2CameraNode::executeGrabBlazeDataAction, this, _1), goal_handle}.detach();
+  std::lock_guard<std::mutex> lock(this->action_threads_mutex_);
+  this->action_threads_.emplace_back(
+    std::bind(&PylonROS2CameraNode::executeGrabBlazeDataAction, this, _1), goal_handle);
 }
 
 void PylonROS2CameraNode::executeGrabBlazeDataAction(const std::shared_ptr<GrabBlazeDataGoalHandle> goal_handle)

@@ -34,69 +34,33 @@ QR 码检测节点（ROS 2）
          过滤无效结果，返回最终的字符串列表。
 """
 
-# ============================================================================
-# 导入部分
-# ============================================================================
-
 import os
 import time
-# Python 标准库：操作系统相关功能（路径拼接、文件存在性检查等）
+import math
 
 from ament_index_python.packages import get_package_share_directory
-# ament 是 ROS 2 的构建系统。
-# get_package_share_directory('包名') 返回该包在 install/ 目录下的共享路径，
-# 例如 /home/ubuntu/ros2_ws/install/qrcode_detector/share/qrcode_detector/
-# 用于定位模型文件、配置文件等运行时资源。
 
 import cv2 as cv
-# OpenCV（cv2）是计算机视觉的核心库。
-# 提供图像处理、QR 码检测、深度学习推理等功能。
-# 别名 cv 是社区惯例（import cv2 as cv）。
 
 from cv_bridge import CvBridge
-# CvBridge 是 ROS 2 图像消息与 OpenCV numpy 数组之间的转换桥梁。
-# ROS 话题传输的是 sensor_msgs/Image（序列化格式），
-# OpenCV 需要的是 numpy ndarray（内存中的像素矩阵）。
-# CvBridge 负责两者之间的双向转换。
 
 import rclpy
-# ROS 2 Python 客户端库，提供节点创建、话题发布/订阅、参数管理等核心功能。
 
 from rclpy.executors import ExternalShutdownException
-# 当 ROS 2 节点被外部信号（如 SIGTERM、launch 系统关闭）中断时抛出的异常。
-# 与 KeyboardInterrupt（Ctrl+C）类似，但覆盖更多优雅退出的场景。
 
 from rclpy.node import Node
+from diagnostic_msgs.msg import DiagnosticStatus
+from diagnostic_updater import DiagnosticStatusWrapper, Updater
 from rclpy.qos import QoSProfile, ReliabilityPolicy, HistoryPolicy
-# Node 是 ROS 2 节点的基类。
-# 节点是 ROS 2 中的最小计算单元，拥有自己的参数、话题、服务等。
 
 from sensor_msgs.msg import Image, CameraInfo, CompressedImage
-# sensor_msgs/Image 是 ROS 2 中图像消息的标准类型。
-# 包含字段：
-#   header   — 时间戳 + 坐标系
-#   height   — 图像高度（像素）
-#   width    — 图像宽度（像素）
-#   encoding — 像素编码（如 "bgr8", "mono8", "rgb8"）
-#   data     — 原始像素数据（一维字节数组）
-# sensor_msgs/CompressedImage 是压缩图像消息（JPEG/PNG），带宽更低。
-# sensor_msgs/CameraInfo 包含相机内参矩阵和畸变系数。
 
 from std_msgs.msg import String
-# std_msgs/String 是最简单的 ROS 2 消息类型之一。
-# 只有一个字段 data（字符串），用于传递文本信息。
 
 from geometry_msgs.msg import PoseStamped
-# geometry_msgs/PoseStamped 带时间戳和坐标系的位姿消息（位置 xyz + 四元数姿态 xyzw）。
-# 用于发布 QR 码的 6D 位姿估计结果。
 
 import numpy as np
-# NumPy 用于矩阵运算，solvePnP 需要 numpy 数组作为输入。
 
-
-# ============================================================================
-# 节点类定义
-# ============================================================================
 
 class WeChatQRNode(Node):
     """
@@ -110,13 +74,10 @@ class WeChatQRNode(Node):
     """
 
     def __init__(self):
-        # 调用父类 Node 的初始化，节点名称为 'wechat_qr_node'
-        # 节点名称在 ROS 2 图中必须唯一，用于日志前缀和参数的命名空间
         super().__init__('wechat_qr_node')
         self.get_logger().info('Initializing QR detector node...')
 
         # ==================================================================
-        # 参数声明（declare_parameter）
         # ==================================================================
         # ROS 2 参数机制：
         #   - 声明时指定默认值
@@ -135,7 +96,7 @@ class WeChatQRNode(Node):
         # WeChatQR 模型文件所在目录的绝对路径。
         # 留空字符串时，自动使用本功能包 install 目录下的 models/ 子目录。
 
-        self.declare_parameter('queue_size', 10)
+        self.declare_parameter('queue_size', 1)
         # 订阅器的消息队列长度。
         # 如果处理速度跟不上相机帧率，队列最多缓存 10 帧，
         # 超出后最旧的帧会被丢弃（FIFO 策略）。
@@ -174,7 +135,6 @@ class WeChatQRNode(Node):
         # 需要上游有 image_transport republish 节点提供压缩流。
 
         # ==================================================================
-        # 读取参数值到局部变量
         # ==================================================================
         # get_parameter() 返回 rclpy.parameter.Parameter 对象，
         # .value 属性取出实际的值（类型在声明时由默认值推断）。
@@ -182,7 +142,9 @@ class WeChatQRNode(Node):
         model_dir = self.get_parameter('model_dir').value
         self._use_camera_info = self.get_parameter('use_camera_info').value
         camera_info_topic = self.get_parameter('camera_info_topic').value
-        self._qr_size_m = self.get_parameter('qr_size_m').value
+        self._qr_size_m = float(self.get_parameter('qr_size_m').value)
+        if not math.isfinite(self._qr_size_m) or self._qr_size_m <= 0.0:
+            raise ValueError('qr_size_m must be a finite value greater than zero')
         prefer_wechat_qr = self.get_parameter('prefer_wechat_qr').value
         self._deduplicate_window_s = float(
             self.get_parameter('deduplicate_window_s').value
@@ -190,11 +152,30 @@ class WeChatQRNode(Node):
         self._min_detect_interval_s = float(
             self.get_parameter('min_detect_interval_s').value
         )
+        if not math.isfinite(self._deduplicate_window_s) or self._deduplicate_window_s < 0.0:
+            raise ValueError('deduplicate_window_s must be finite and non-negative')
+        if not math.isfinite(self._min_detect_interval_s) or self._min_detect_interval_s < 0.0:
+            raise ValueError('min_detect_interval_s must be finite and non-negative')
         self._use_compressed = bool(
             self.get_parameter('use_compressed').value
         )
+        self._queue_size = int(self.get_parameter('queue_size').value)
+        if self._queue_size < 1:
+            raise ValueError('queue_size must be a positive integer')
         self._last_published_at = {}
         self._last_detect_time = 0.0
+        self._frames_received = 0
+        self._frames_processed = 0
+        self._detections_seen = 0
+        self._results_published = 0
+        self._processing_errors = 0
+        self._frames_skipped = 0
+        self._metrics_started_at = time.monotonic()
+        self._processing_time_s = 0.0
+        self._last_processing_ms = 0.0
+        self._max_processing_ms = 0.0
+        self._last_image_time = None
+        self._last_detection_time = None
 
         # 相机内参（从 CameraInfo 消息中填充）
         self._camera_matrix = None   # 3x3 numpy 数组
@@ -202,7 +183,6 @@ class WeChatQRNode(Node):
         self._camera_frame_id = ''   # 相机坐标系名称
 
         # ==================================================================
-        # 初始化 CvBridge
         # ==================================================================
         # CvBridge 是一个轻量工具类，无需额外配置。
         # 核心方法：
@@ -230,21 +210,21 @@ class WeChatQRNode(Node):
         # 后续 _decode_qr 根据此值选择不同的解码逻辑。
 
         # ==================================================================
-        # 创建发布者（Publisher）
         # ==================================================================
         # create_publisher(消息类型, 话题名, 队列大小)
         # '~/decoded_info' 中 '~' 是私有命名空间缩写，
         # 展开后为 /wechat_qr_node/decoded_info
-        self.result_pub = self.create_publisher(String, '~/decoded_info', 10)
+        self.result_pub = self.create_publisher(
+            String, '~/decoded_info', self._queue_size
+        )
 
         # ==================================================================
-        # 创建订阅者（Subscriber）
         # ==================================================================
         # 图像话题使用 BEST_EFFORT + KEEP_LAST(1)：丢弃旧帧而非阻塞相机
         sensor_qos = QoSProfile(
             reliability=ReliabilityPolicy.BEST_EFFORT,
             history=HistoryPolicy.KEEP_LAST,
-            depth=1,
+            depth=self._queue_size,
         )
         if self._use_compressed:
             compressed_topic = image_topic + '/compressed'
@@ -277,12 +257,20 @@ class WeChatQRNode(Node):
                 CameraInfo,
                 camera_info_topic,
                 self._camera_info_callback,
-                sensor_qos,
+                QoSProfile(
+                    reliability=ReliabilityPolicy.RELIABLE,
+                    history=HistoryPolicy.KEEP_LAST,
+                    depth=self._queue_size,
+                ),
             )
             self.get_logger().info(
                 f'use_camera_info 已启用，订阅 {camera_info_topic}，'
                 f'qr_size_m={self._qr_size_m}'
             )
+
+        self._diag_updater = Updater(self)
+        self._diag_updater.setHardwareID('qrcode_detector')
+        self._diag_updater.add('QR Detector Status', self._diagnostic_status)
 
         # 启动日志
         self.get_logger().info(
@@ -588,29 +576,42 @@ class WeChatQRNode(Node):
 
     def compressed_image_callback(self, msg: CompressedImage):
         """压缩图像回调：从 CompressedImage 解码后复用检测逻辑。"""
+        self._frames_received += 1
+        self._last_image_time = time.monotonic()
         if self._min_detect_interval_s > 0.0:
             now = time.monotonic()
             if now - self._last_detect_time < self._min_detect_interval_s:
+                self._frames_skipped += 1
                 return
             self._last_detect_time = now
+
+        processing_started_at = time.monotonic()
 
         try:
             np_arr = np.frombuffer(msg.data, np.uint8)
             cv_image = cv.imdecode(np_arr, cv.IMREAD_GRAYSCALE)
             if cv_image is None:
+                self._processing_errors += 1
                 self.get_logger().error('压缩图像解码失败')
+                self._record_processing_time(processing_started_at)
                 return
         except Exception as e:
+            self._processing_errors += 1
             self.get_logger().error(f'压缩图像解码异常: {e}')
+            self._record_processing_time(processing_started_at)
             return
 
         try:
             decoded_info, points_list = self._decode_qr(cv_image)
         except Exception as e:
+            self._processing_errors += 1
             self.get_logger().error(f'二维码检测失败: {e}')
+            self._record_processing_time(processing_started_at)
             return
 
         if decoded_info:
+            self._detections_seen += len(decoded_info)
+            self._last_detection_time = time.monotonic()
             for i, info in enumerate(decoded_info):
                 if self._pose_pub is not None and i < len(points_list):
                     corners = points_list[i]
@@ -625,6 +626,9 @@ class WeChatQRNode(Node):
                 str_msg = String()
                 str_msg.data = info
                 self.result_pub.publish(str_msg)
+                self._results_published += 1
+        self._frames_processed += 1
+        self._record_processing_time(processing_started_at)
 
     def image_callback(self, msg: Image):
         """
@@ -639,12 +643,18 @@ class WeChatQRNode(Node):
             msg: sensor_msgs/Image 消息，包含一帧相机图像
         """
 
+        self._frames_received += 1
+        self._last_image_time = time.monotonic()
+
         # ---- 帧率控制：跳过过于密集的检测请求 ----
         if self._min_detect_interval_s > 0.0:
             now = time.monotonic()
             if now - self._last_detect_time < self._min_detect_interval_s:
+                self._frames_skipped += 1
                 return
             self._last_detect_time = now
+
+        processing_started_at = time.monotonic()
 
         # ---- 步骤 1：ROS Image → OpenCV numpy 数组 ----
         # 使用 passthrough 保持原始编码（相机输出 mono8，无需转 bgr8）
@@ -652,19 +662,25 @@ class WeChatQRNode(Node):
         try:
             cv_image = self.bridge.imgmsg_to_cv2(msg, desired_encoding='passthrough')
         except Exception as e:
+            self._processing_errors += 1
             # 可能的异常：图像编码不支持、数据损坏等
             self.get_logger().error(f'图像转换失败: {e}')
+            self._record_processing_time(processing_started_at)
             return  # 跳过本帧，等待下一帧
 
         # ---- 步骤 2：QR 码检测与解码 ----
         try:
             decoded_info, points_list = self._decode_qr(cv_image)
         except Exception as e:
+            self._processing_errors += 1
             self.get_logger().error(f'二维码检测失败: {e}')
+            self._record_processing_time(processing_started_at)
             return
 
         # ---- 步骤 3：发布解码结果 ----
         if decoded_info:
+            self._detections_seen += len(decoded_info)
+            self._last_detection_time = time.monotonic()
             for i, info in enumerate(decoded_info):
                 # 位姿估计（use_camera_info 启用时）
                 if self._pose_pub is not None and i < len(points_list):
@@ -685,6 +701,50 @@ class WeChatQRNode(Node):
                 str_msg = String()
                 str_msg.data = info
                 self.result_pub.publish(str_msg)
+                self._results_published += 1
+        self._frames_processed += 1
+        self._record_processing_time(processing_started_at)
+
+    def _record_processing_time(self, started_at: float) -> None:
+        elapsed = max(0.0, time.monotonic() - started_at)
+        self._processing_time_s += elapsed
+        processing_ms = elapsed * 1000.0
+        self._last_processing_ms = processing_ms
+        self._max_processing_ms = max(self._max_processing_ms, processing_ms)
+
+    def _diagnostic_status(self, stat: DiagnosticStatusWrapper):
+        """Expose QR processing liveness and counters through /diagnostics."""
+        now = time.monotonic()
+        if self._last_image_time is None:
+            stat.summary(DiagnosticStatus.WARN, 'Waiting for image data')
+        elif now - self._last_image_time > 5.0:
+            stat.summary(DiagnosticStatus.ERROR, 'No recent image data')
+        elif self._processing_errors:
+            stat.summary(DiagnosticStatus.WARN, 'Processing errors detected')
+        else:
+            stat.summary(DiagnosticStatus.OK, f'Backend: {self.detector_kind}')
+        stat.add('backend', self.detector_kind)
+        stat.add('frames_received', str(self._frames_received))
+        stat.add('frames_processed', str(self._frames_processed))
+        stat.add('detections_seen', str(self._detections_seen))
+        stat.add('results_published', str(self._results_published))
+        stat.add('processing_errors', str(self._processing_errors))
+        elapsed = max(0.0, now - getattr(self, '_metrics_started_at', now))
+        processing_fps = (
+            self._frames_processed / elapsed if elapsed > 0.0 else 0.0
+        )
+        average_processing_ms = (
+            self._processing_time_s * 1000.0 / self._frames_processed
+            if self._frames_processed > 0 else 0.0
+        )
+        stat.add('frames_skipped', str(getattr(self, '_frames_skipped', 0)))
+        stat.add('processing_fps', f'{processing_fps:.3f}')
+        stat.add('last_processing_ms', f'{self._last_processing_ms:.3f}')
+        stat.add('average_processing_ms', f'{average_processing_ms:.3f}')
+        stat.add('max_processing_ms', f'{self._max_processing_ms:.3f}')
+        if self._last_detection_time is not None:
+            stat.add('seconds_since_detection', f'{now - self._last_detection_time:.3f}')
+        return stat
 
 
 # ============================================================================

@@ -88,7 +88,12 @@ class AprilGridCalibrator:
         )
 
     def detect_board(self, gray_image: np.ndarray) -> list[dict]:
-        detections = self.detector.detect(gray_image)
+        image = np.asarray(gray_image)
+        if image.ndim == 3:
+            image = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
+        if image.ndim != 2:
+            raise ValueError('AprilTag detection requires a 2D grayscale image')
+        detections = self.detector.detect(image)
         return [d for d in detections if 0 <= int(d['id']) < self.spec.num_tags]
 
     def tag_image_points(self, detection: dict) -> np.ndarray:

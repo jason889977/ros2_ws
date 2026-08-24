@@ -10,6 +10,7 @@ services:
       # Camera 1
       CAMERA_ID: ${CAMERA_ID:-my_camera}
       CAMERA_CONFIG_FILE: ${CAMERA_CONFIG_FILE:-/opt/ros2_ws/deploy/basler_camera/config/aca2500_106611_18.yaml}
+      CAMERA_FRAME: ${CAMERA_FRAME:-basler_aca2500_106611_18}
       CAMERA_MTU_SIZE: ${CAMERA_MTU_SIZE:-1500}
       CAMERA_STARTUP_USER_SET: ${CAMERA_STARTUP_USER_SET:-Default}
       CAMERA_RESPAWN: ${CAMERA_RESPAWN:-true}
@@ -21,16 +22,23 @@ services:
       ENABLE_APRILTAG: ${ENABLE_APRILTAG:-true}
       ENABLE_QRCODE: ${ENABLE_QRCODE:-true}
       ENABLE_KEYENCE: ${ENABLE_KEYENCE:-true}
+      PREFER_WECHAT_QR: ${PREFER_WECHAT_QR:-true}
+      MIN_DETECT_INTERVAL_S: ${MIN_DETECT_INTERVAL_S:-0.2}
+      USE_COMPRESSED: ${USE_COMPRESSED:-false}
       # Camera 2 (leave CAMERA_ID_2 empty to disable dual-camera)
       CAMERA_ID_2: ${CAMERA_ID_2:-}
       # Required and must identify a different physical camera when CAMERA_ID_2 is set.
       CAMERA_CONFIG_2: ${CAMERA_CONFIG_2:-}
+      CAMERA_FRAME_2: ${CAMERA_FRAME_2:-}
       CAMERA_STARTUP_USER_SET_2: ${CAMERA_STARTUP_USER_SET_2:-Default}
       SCANNER_IP_2: ${SCANNER_IP_2:-}
       SCANNER_PORT_2: ${SCANNER_PORT_2:-}
       ENABLE_APRILTAG_2: ${ENABLE_APRILTAG_2:-true}
       ENABLE_QRCODE_2: ${ENABLE_QRCODE_2:-true}
       ENABLE_KEYENCE_2: ${ENABLE_KEYENCE_2:-true}
+      PREFER_WECHAT_QR_2: ${PREFER_WECHAT_QR_2:-${PREFER_WECHAT_QR:-true}}
+      MIN_DETECT_INTERVAL_S_2: ${MIN_DETECT_INTERVAL_S_2:-${MIN_DETECT_INTERVAL_S:-0.2}}
+      USE_COMPRESSED_2: ${USE_COMPRESSED_2:-${USE_COMPRESSED:-false}}
     command: ["ros2", "launch", "industrial_vision_bringup", "vision_pipeline.launch.py"]
     devices: []
     volumes:

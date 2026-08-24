@@ -61,7 +61,7 @@ Visualization Manager:
         Durability Policy: Volatile
         Filter size: 10
         History Policy: Keep Last
-        Reliability Policy: Reliable
+        Reliability Policy: Best Effort
         Value: /my_camera/pylon_ros2_camera_node/image_raw
       Value: true
   Enabled: true

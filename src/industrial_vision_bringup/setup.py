@@ -20,4 +20,10 @@ setup(
     maintainer_email='jason889977@users.noreply.github.com',
     description='Unified Basler, AprilTag and QR vision pipeline bringup.',
     license='BSD-3-Clause',
+    tests_require=['pytest'],
+    entry_points={
+        'console_scripts': [
+            'vision_status_aggregator = industrial_vision_bringup.vision_status_aggregator:main',
+        ],
+    },
 )

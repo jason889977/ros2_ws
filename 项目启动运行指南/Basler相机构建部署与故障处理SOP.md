@@ -217,7 +217,6 @@ index=1 model=acA2440-20gm serial=22784373 user_id=GigE_acA2440-20 ip=172.31.0.8
 ```text
 src/pylon_ros2_camera_wrapper/config/aca2500_106611_18.yaml
 deploy/basler_camera/config/aca2500_106611_18.yaml
-src/pylon_ros2_camera_wrapper/config/aca2500_106611_18.tuned_v3.yaml
 src/pylon_ros2_camera_wrapper/config/aca2500_106611_18.calib.yaml
 deploy/basler_camera/udev/README.md
 ```
@@ -248,48 +247,11 @@ grep -RIn "106611-18\|22297681\|00:30:53:23:0f:51" \
   src/pylon_ros2_camera_wrapper/config | cat
 ```
 
-期望无输出。
+命令无输出表示旧设备标识已清理。
 
-## 8. 健康检查与话题验证
+## 8. 运行时健康检查
 
-容器状态：
-
-```bash
-sudo -n docker inspect --format '{{.State.Status}} {{if .State.Health}}{{.State.Health.Status}}{{else}}no-healthcheck{{end}}' basler_camera
-sudo -n docker ps --filter name=basler_camera --format 'table {{.Names}}\t{{.Image}}\t{{.Status}}'
-```
-
-手动执行 healthcheck：
-
-```bash
-sudo -n docker exec basler_camera /opt/ros2_ws/deploy/basler_camera/healthcheck.sh
-echo $?
-```
-
-ROS 2 节点和话题：
-
-```bash
-sudo -n docker exec basler_camera sh -lc '. /opt/ros/humble/setup.sh && . /opt/ros2_ws/install/setup.sh && ros2 node list && echo ---topics--- && ros2 topic list'
-```
-
-核心话题应包括：
-
-```text
-/my_camera/pylon_ros2_camera_node/camera_info
-/my_camera/pylon_ros2_camera_node/image_raw
-/my_camera/detections
-/my_camera/apriltag/pose
-/my_camera/qr/decoded_info
-/my_camera/scanner/barcode
-```
-
-消息验证：
-
-```bash
-sudo -n docker exec basler_camera sh -lc '. /opt/ros/humble/setup.sh && . /opt/ros2_ws/install/setup.sh && timeout 8s ros2 topic echo /my_camera/pylon_ros2_camera_node/camera_info --once >/tmp/camera_info.txt && echo camera_info_ok'
-
-sudo -n docker exec basler_camera sh -lc '. /opt/ros/humble/setup.sh && . /opt/ros2_ws/install/setup.sh && timeout 8s ros2 topic echo /my_camera/pylon_ros2_camera_node/image_raw --once >/tmp/image_raw.txt && echo image_raw_ok'
-```
+运行时容器状态、节点、话题和消息验证统一参阅 [故障排查手册](故障排查手册.md)。本 SOP 只保留 Basler SDK、镜像构建、网络、相机占用和容器构建问题。
 
 ## 9. 常见问题与处理
 

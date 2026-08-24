@@ -20,6 +20,7 @@ jobs:
             ros-humble-cv-bridge ros-humble-sensor-msgs ros-humble-std-msgs \
             ros-humble-std-srvs ros-humble-tf2-ros ros-humble-tf2-msgs \
             ros-humble-geometry-msgs ros-humble-apriltag-msgs \
+            ros-humble-diagnostic-msgs ros-humble-diagnostic-updater \
             ros-humble-rclpy ros-humble-ament-copyright \
             ros-humble-ament-flake8 ros-humble-ament-pep257
 
@@ -27,8 +28,27 @@ jobs:
         run: |
           . /opt/ros/humble/setup.sh
           colcon build --symlink-install --packages-select \
+            pylon_ros2_camera_interfaces \
             apriltag_pose_reader keyence_sr_wrapper qrcode_detector \
             industrial_vision_bringup
+
+      - name: Build Basler C++ packages when pylon is available
+        run: |
+          . /opt/ros/humble/setup.sh
+          if [ -d /opt/pylon/include/pylon ] && [ -d /opt/pylon/lib ]; then
+            colcon build --symlink-install --packages-select \
+              pylon_ros2_camera_component pylon_ros2_camera_wrapper
+          else
+            echo "pylon SDK is unavailable in this runner; C++ camera build is covered by the deployment image build."
+          fi
+
+      - name: Validate scripts and Python sources
+        run: |
+          bash -n deploy/basler_camera/entrypoint.sh deploy/basler_camera/healthcheck.sh
+          python3 -m compileall -q src scripts
+          cmp -s \
+            src/pylon_ros2_camera_wrapper/config/aca2500_106611_18.yaml \
+            deploy/basler_camera/config/aca2500_106611_18.yaml
 
       - name: Run unit tests
         run: |
@@ -38,12 +58,14 @@ jobs:
             src/keyence_sr_wrapper/test/ \
             src/apriltag_pose_reader/test/ \
             src/qrcode_detector/test/test_qr_dedup.py \
+            src/industrial_vision_bringup/test/ \
             -v
 
       - name: Lint Python packages
         run: |
           . /opt/ros/humble/setup.sh
           colcon test --packages-select \
-            apriltag_pose_reader keyence_sr_wrapper qrcode_detector \
+            pylon_ros2_camera_interfaces apriltag_pose_reader \
+            keyence_sr_wrapper qrcode_detector industrial_vision_bringup \
             --event-handlers console_cohesion+
           colcon test-result --verbose

@@ -36,19 +36,20 @@ class AprilGridSpec:
         return list(range(self.num_tags))
 
     def tag_corner_points(self, tag_id: int) -> np.ndarray:
-        """Return the 4 corner points of a tag in its local coordinate frame.
-
-        The local tag frame is centered at the tag center and the axes are aligned
-        with the board plane. The returned points are ordered clockwise starting at
-        the top-left corner in the x-y plane.
-        """
-        half = self.tag_size_m / 2.0
+        """Return tag corners in board coordinates, from top-left clockwise."""
+        if tag_id not in self.tag_ids:
+            raise ValueError(f'tag_id must be in [0, {self.num_tags - 1}]')
+        row = tag_id // self.cols
+        col = tag_id % self.cols
+        x = col * self.tag_center_spacing_m
+        y = row * self.tag_center_spacing_m
+        size = self.tag_size_m
         return np.array(
             [
-                [-half, -half, 0.0],
-                [half, -half, 0.0],
-                [half, half, 0.0],
-                [-half, half, 0.0],
+                [x, y, 0.0],
+                [x + size, y, 0.0],
+                [x + size, y + size, 0.0],
+                [x, y + size, 0.0],
             ],
             dtype=np.float64,
         )
@@ -56,21 +57,8 @@ class AprilGridSpec:
     def board_points_in_tag_frame(self) -> np.ndarray:
         """Return all board landmark points in the board coordinate frame."""
         points = []
-        for row in range(self.rows):
-            for col in range(self.cols):
-                tag_index = row * self.cols + col
-                local = self.tag_corner_points(tag_index)
-                cx = (col * self.tag_center_spacing_m) + (self.tag_size_m / 2.0)
-                cy = (row * self.tag_center_spacing_m) + (self.tag_size_m / 2.0)
-                tag_center = np.array([cx, cy, 0.0], dtype=np.float64)
-                # The board frame origin is defined at the top-left tag corner in the
-                # first tag, so translate each tag's local frame to the board plane.
-                translated = local + np.array([
-                    col * self.tag_center_spacing_m,
-                    row * self.tag_center_spacing_m,
-                    0.0,
-                ], dtype=np.float64)
-                points.append(translated)
+        for tag_index in self.tag_ids:
+            points.append(self.tag_corner_points(tag_index))
         return np.vstack(points)
 
     def board_origin_world(self) -> np.ndarray:

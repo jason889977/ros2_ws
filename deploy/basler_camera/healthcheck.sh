@@ -40,6 +40,10 @@ check_modules() {
     return 1
   }
 
+  enable_apriltag="${enable_apriltag,,}"
+  enable_qrcode="${enable_qrcode,,}"
+  enable_keyence="${enable_keyence,,}"
+
   # An enabled module is required for this pipeline to be healthy. Compose's
   # start period absorbs normal respawn/startup delay before health is checked.
   if [[ "$enable_apriltag" == "true" ]]; then
@@ -69,6 +73,19 @@ check_modules "${CAMERA_ID:-my_camera}" "${ENABLE_APRILTAG:-true}" \
 if [[ -n "${CAMERA_ID_2:-}" ]]; then
   check_modules "$CAMERA_ID_2" "${ENABLE_APRILTAG_2:-true}" \
     "${ENABLE_QRCODE_2:-true}" "${ENABLE_KEYENCE_2:-true}" || exit 1
+fi
+
+check_pipeline_status() {
+  local camera_id="$1"
+  local status_topic="/${camera_id}/vision/status"
+  local payload
+  payload="$(timeout 8s ros2 topic echo "$status_topic" --once 2>/dev/null)" || return 1
+  grep -Eq 'overall_level: [23]($|[[:space:]])' <<<"$payload" && return 1
+}
+
+check_pipeline_status "${CAMERA_ID:-my_camera}" || exit 1
+if [[ -n "${CAMERA_ID_2:-}" ]]; then
+  check_pipeline_status "$CAMERA_ID_2" || exit 1
 fi
 
 echo "OK"

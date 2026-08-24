@@ -5,6 +5,7 @@ import unittest
 from unittest.mock import patch
 
 import numpy as np
+from diagnostic_msgs.msg import DiagnosticStatus
 
 from qrcode_detector.qrcode_node import WeChatQRNode
 
@@ -73,6 +74,50 @@ class TestQRCorners(unittest.TestCase):
                 np.array([[0.0, 0.0], [np.nan, 0.0], [0.0, 0.0], [0.0, 0.0]])
             )
         )
+
+
+class TestQRDiagnostics(unittest.TestCase):
+
+    def test_diagnostics_include_processing_metrics(self):
+        node = WeChatQRNode.__new__(WeChatQRNode)
+        node.detector_kind = 'opencv'
+        node._last_image_time = 0.0
+        node._last_detection_time = None
+        node._frames_received = 4
+        node._frames_processed = 2
+        node._detections_seen = 1
+        node._results_published = 1
+        node._processing_errors = 0
+        node._frames_skipped = 2
+        node._metrics_started_at = 0.0
+        node._processing_time_s = 0.02
+        node._last_processing_ms = 8.0
+        node._max_processing_ms = 12.0
+
+        class FakeStatus:
+            def __init__(self):
+                self.values = []
+
+            def summary(self, level, message):
+                self.level = level
+                self.message = message
+
+            def add(self, key, value):
+                self.values.append((key, value))
+
+        with patch(
+            'qrcode_detector.qrcode_node.time.monotonic',
+            return_value=1.0,
+        ):
+            status = FakeStatus()
+            result = node._diagnostic_status(status)
+
+        metrics = dict(status.values)
+        self.assertIs(result, status)
+        self.assertEqual(status.level, DiagnosticStatus.OK)
+        self.assertEqual(metrics['frames_skipped'], '2')
+        self.assertEqual(metrics['processing_fps'], '2.000')
+        self.assertEqual(metrics['average_processing_ms'], '10.000')
 
 
 if __name__ == '__main__':

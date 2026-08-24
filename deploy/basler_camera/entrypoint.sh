@@ -62,6 +62,9 @@ if [[ "${*}" == *"vision_pipeline.launch.py"* ]]; then
   CAM1_ARGS=(
     camera_id:="$CAM1_ID"
     camera_config:="$CAM1_CONFIG"
+    camera_frame:="${CAMERA_FRAME:-basler_aca2500_106611_18}"
+    mtu_size:="${CAMERA_MTU_SIZE:-1500}"
+    respawn:="${CAMERA_RESPAWN:-true}"
     startup_user_set:="${CAMERA_STARTUP_USER_SET:-Default}"
     scanner_ip:="${SCANNER_IP:-172.31.0.91}"
     scanner_port:="${SCANNER_PORT:-9004}"
@@ -69,6 +72,9 @@ if [[ "${*}" == *"vision_pipeline.launch.py"* ]]; then
     enable_apriltag:="${ENABLE_APRILTAG:-true}"
     enable_qrcode:="${ENABLE_QRCODE:-true}"
     enable_keyence:="${ENABLE_KEYENCE:-true}"
+    prefer_wechat_qr:="${PREFER_WECHAT_QR:-true}"
+    min_detect_interval_s:="${MIN_DETECT_INTERVAL_S:-0.2}"
+    use_compressed:="${USE_COMPRESSED:-false}"
   )
 
   if [[ -n "${CAMERA_ID_2:-}" ]]; then
@@ -80,6 +86,14 @@ if [[ "${*}" == *"vision_pipeline.launch.py"* ]]; then
       echo "[entrypoint] CAMERA_CONFIG_2 is required when CAMERA_ID_2 is set" >&2
       exit 64
     fi
+    if [[ "${ENABLE_APRILTAG_2:-true}" == "true" && -z "${CAMERA_FRAME_2:-}" ]]; then
+      echo "[entrypoint] CAMERA_FRAME_2 is required when AprilTag is enabled for CAMERA_ID_2" >&2
+      exit 64
+    fi
+    if [[ "${ENABLE_APRILTAG:-true}" == "true" && "${ENABLE_APRILTAG_2:-true}" == "true" && "${CAMERA_FRAME_2:-}" == "${CAMERA_FRAME:-basler_aca2500_106611_18}" ]]; then
+      echo "[entrypoint] CAMERA_FRAME_2 must differ from CAMERA_FRAME for dual-camera AprilTag" >&2
+      exit 64
+    fi
     CAM2_CONFIG="$CAMERA_CONFIG_2"
     if [[ "$CAM2_CONFIG" == "$CAM1_CONFIG" ]]; then
       echo "[entrypoint] CAMERA_CONFIG_2 must differ from CAMERA_CONFIG_FILE" >&2
@@ -88,6 +102,9 @@ if [[ "${*}" == *"vision_pipeline.launch.py"* ]]; then
     CAM2_ARGS=(
       camera_id:="$CAMERA_ID_2"
       camera_config:="$CAM2_CONFIG"
+      camera_frame:="${CAMERA_FRAME_2:-}"
+      mtu_size:="${CAMERA_MTU_SIZE_2:-${CAMERA_MTU_SIZE:-1500}}"
+      respawn:="${CAMERA_RESPAWN_2:-${CAMERA_RESPAWN:-true}}"
       startup_user_set:="${CAMERA_STARTUP_USER_SET_2:-Default}"
       scanner_ip:="${SCANNER_IP_2:-${SCANNER_IP:-172.31.0.91}}"
       scanner_port:="${SCANNER_PORT_2:-${SCANNER_PORT:-9004}}"
@@ -95,6 +112,9 @@ if [[ "${*}" == *"vision_pipeline.launch.py"* ]]; then
       enable_apriltag:="${ENABLE_APRILTAG_2:-true}"
       enable_qrcode:="${ENABLE_QRCODE_2:-true}"
       enable_keyence:="${ENABLE_KEYENCE_2:-true}"
+      prefer_wechat_qr:="${PREFER_WECHAT_QR_2:-${PREFER_WECHAT_QR:-true}}"
+      min_detect_interval_s:="${MIN_DETECT_INTERVAL_S_2:-${MIN_DETECT_INTERVAL_S:-0.2}}"
+      use_compressed:="${USE_COMPRESSED_2:-${USE_COMPRESSED:-false}}"
     )
 
     echo "[entrypoint] Launching dual-camera pipeline:"

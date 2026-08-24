@@ -1,10 +1,20 @@
 import csv
+import importlib.util
+from pathlib import Path
 
 import cv2
 import numpy as np
 import pytest
 
-from scripts.handeye_calibrate import _closed_loop_errors, _homogeneous, read_rows, solve
+SCRIPT_PATH = Path(__file__).parents[3] / 'scripts' / 'handeye_calibrate.py'
+SPEC = importlib.util.spec_from_file_location('handeye_calibrate', SCRIPT_PATH)
+MODULE = importlib.util.module_from_spec(SPEC)
+SPEC.loader.exec_module(MODULE)
+
+_closed_loop_errors = MODULE._closed_loop_errors
+_homogeneous = MODULE._homogeneous
+read_rows = MODULE.read_rows
+solve = MODULE.solve
 
 
 def _rotation(axis, angle):

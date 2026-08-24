@@ -36,18 +36,21 @@
 
 namespace pylon_ros2_camera
 {
-  class TestGrabImageActionClient : public rclcpp::Node
+  class TestGrabImagesActionClient : public rclcpp::Node
   {
     public:
       using GrabImagesAction              = pylon_ros2_camera_interfaces::action::GrabImages;
       using GrabImagesGoalHandle          = rclcpp_action::ClientGoalHandle<GrabImagesAction>;
 
-      explicit TestGrabImageActionClient(const rclcpp::NodeOptions & options) : Node("test_grab_image_action_client", options)
+      explicit TestGrabImagesActionClient(const rclcpp::NodeOptions & options) : Node("test_grab_images_action_client", options)
       {
-        // to be adapted if needed
-        this->client_ptr_ = rclcpp_action::create_client<GrabImagesAction>(this, "/my_camera/pylon_ros2_camera_node/grab_images_raw");
+        this->declare_parameter<std::string>("action_name", "../pylon_ros2_camera_node/grab_images_raw");
+        this->declare_parameter<int>("server_wait_timeout_s", 10);
+        const auto action_name = this->get_parameter("action_name").as_string();
+        this->server_wait_timeout_s_ = this->get_parameter("server_wait_timeout_s").as_int();
+        this->client_ptr_ = rclcpp_action::create_client<GrabImagesAction>(this, action_name);
 
-        this->timer_ = this->create_wall_timer(std::chrono::milliseconds(500), std::bind(&TestGrabImageActionClient::send_goal, this));
+        this->timer_ = this->create_wall_timer(std::chrono::milliseconds(500), std::bind(&TestGrabImagesActionClient::send_goal, this));
       }
 
       void send_goal()
@@ -56,10 +59,11 @@ namespace pylon_ros2_camera
 
         this->timer_->cancel();
 
-        if (!this->client_ptr_->wait_for_action_server())
+        if (!this->client_ptr_->wait_for_action_server(std::chrono::seconds(this->server_wait_timeout_s_)))
         {
-          RCLCPP_ERROR(this->get_logger(), "Action server not available after waiting, shutting down now...");
+          RCLCPP_ERROR(this->get_logger(), "Action server not available after %ld seconds, shutting down now...", this->server_wait_timeout_s_);
           rclcpp::shutdown();
+          return;
         }
 
         auto goal_msg = GrabImagesAction::Goal();
@@ -74,9 +78,9 @@ namespace pylon_ros2_camera
         RCLCPP_INFO(this->get_logger(), "Sending goal...");
 
         auto send_goal_options = rclcpp_action::Client<GrabImagesAction>::SendGoalOptions();
-        send_goal_options.goal_response_callback = std::bind(&TestGrabImageActionClient::goal_response_callback, this, _1);
-        send_goal_options.feedback_callback = std::bind(&TestGrabImageActionClient::feedback_callback, this, _1, _2);
-        send_goal_options.result_callback = std::bind(&TestGrabImageActionClient::result_callback, this, _1);
+        send_goal_options.goal_response_callback = std::bind(&TestGrabImagesActionClient::goal_response_callback, this, _1);
+        send_goal_options.feedback_callback = std::bind(&TestGrabImagesActionClient::feedback_callback, this, _1, _2);
+        send_goal_options.result_callback = std::bind(&TestGrabImagesActionClient::result_callback, this, _1);
         this->client_ptr_->async_send_goal(goal_msg, send_goal_options);
 
         RCLCPP_INFO(this->get_logger(), "Goal sent!");
@@ -85,6 +89,7 @@ namespace pylon_ros2_camera
     private:
       rclcpp_action::Client<GrabImagesAction>::SharedPtr client_ptr_;
       rclcpp::TimerBase::SharedPtr timer_;
+      int64_t server_wait_timeout_s_{10};
 
       void goal_response_callback(const GrabImagesGoalHandle::SharedPtr & goal_handle)
       {
@@ -124,6 +129,12 @@ namespace pylon_ros2_camera
         for (std::size_t i = 0; i < result.result->images.size(); i++)
         {
           sensor_msgs::msg::Image& img = result.result->images[i];
+
+          if (img.data.empty())
+          {
+            RCLCPP_ERROR_STREAM(this->get_logger(), "The image contains no data");
+            continue;
+          }
           
           RCLCPP_INFO_STREAM(this->get_logger(), "Image #" << i+1 << "\n\t"
             << "Encoding:  " << img.encoding << "\n\t"
@@ -134,6 +145,12 @@ namespace pylon_ros2_camera
             << "Frame ID:  " << img.header.frame_id);
           
           cv_bridge::CvImagePtr cv_img = cv_bridge::toCvCopy(result.result->images[i], result.result->images[i].encoding);
+
+          if (cv_img == nullptr)
+          {
+            RCLCPP_ERROR_STREAM(this->get_logger(), "The image cannot be converted to cv::Mat");
+            continue;
+          }
           
           std::ostringstream ss;
           ss << "Image #" << i+1;
@@ -153,8 +170,8 @@ namespace pylon_ros2_camera
         rclcpp::shutdown();
       }
   
-  }; // class TestGrabImageActionClient
+  }; // class TestGrabImagesActionClient
 
 } // namespace pylon_ros2_camera
 
-RCLCPP_COMPONENTS_REGISTER_NODE(pylon_ros2_camera::TestGrabImageActionClient)
+RCLCPP_COMPONENTS_REGISTER_NODE(pylon_ros2_camera::TestGrabImagesActionClient)

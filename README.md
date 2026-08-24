@@ -7,13 +7,13 @@
 - **统一容器部署**：单 Docker 容器运行全部检测链路，一键启动
 - **模块化检测链**：AprilTag / QR / Keyence 可独立启用/禁用（`enable_apriltag` / `enable_qrcode` / `enable_keyence`）
 - **多相机支持**：同一容器内运行两条独立 pipeline，每台相机可配不同检测链路，输出话题按 `camera_id` 命名空间隔离
-- **零拷贝图像传输**：C++ 节点（camera + apriltag_ros）运行在 `ComposableNodeContainer` 中，启用 intra-process 零拷贝
+- **相机组件化运行**：Basler 相机 C++ 节点运行在 `ComposableNodeContainer` 中并启用 intra-process 通信；AprilTag、二维码和 Keyence 节点作为独立进程运行
 - **BEST_EFFORT QoS**：图像发布/订阅均使用 `BEST_EFFORT + depth=1`，丢弃旧帧而非阻塞采集循环
 - **GenICam 读取节流**：`publishCurrentParams` 从每帧 30+ 次网络读取降至 1Hz；chunk mode 寄存器每帧 2 次读取改为 init 缓存
 - **12-bit 零分配**：bit-shift 转换缓冲区复用为成员变量，消除每帧 ~10MB 堆分配
 - **编码缓存**：`currentROSEncoding` init 时计算一次，服务回调时更新，消除每帧 GenICam 字符串读取
 - **自动重连**：Keyence TCP 连接带定时重连 + `SO_KEEPALIVE` + `RLock` 线程安全保护
-- **节点自动恢复**：所有节点配置 `respawn=True` + `respawn_delay=3.0`，崩溃后自动重启且防风暴
+- **检测模块自动恢复**：AprilTag、二维码和 Keyence 节点配置 `respawn=True` + `respawn_delay=3.0`，崩溃后自动重启且防风暴
 - **诊断集成**：Keyence / AprilTag 节点通过 `diagnostic_updater` 上报状态
 - **资源限制**：Docker 容器配置 `mem_limit`/`cpus` + 日志轮转（`json-file 50m × 3`）
 - **78 处空指针保护**：C++ 相机节点所有服务回调、detached action 线程均添加 null guard，防止相机重连期间段错误
@@ -32,9 +32,7 @@ src/
 
 deploy/
 ├── basler_camera/                  # 统一容器 Dockerfile + compose + healthcheck
-├── qrcode_detector/                # 独立 QR 容器（遗留，非生产主路径）
-├── apriltag_pose_reader/           # 独立 AprilTag 容器（遗留）
-└── keyence_sr_wrapper/             # 独立 Keyence 容器（遗留）
+└── DELIVERY_SUMMARY.md              # 统一容器交付摘要
 
 scripts/                            # 部署、标定、RViz 脚本
 项目启动运行指南/                    # 中文文档（SOP、故障排查、交接文档）
@@ -47,17 +45,17 @@ graph TB
     subgraph Docker Container ["Docker Container (basler_camera)"]
         subgraph ComponentContainer ["vision_container (C++ 零拷贝, BEST_EFFORT QoS)"]
             CAM["pylon_ros2_camera_node<br/>(Basler GigE 驱动)"]
-            AT["apriltag_ros<br/>(AprilTag 检测)"]
         end
 
         subgraph DetectionChain ["检测链路 (按 enable_* 开关)"]
             ATR["apriltag_pose_reader<br/>(位姿解算)"]
             QR["wechat_qr_node<br/>(二维码识别, BEST_EFFORT)"]
             KEY["keyence_sr_node<br/>(Keyence 扫码, SO_KEEPALIVE)"]
+            AT["apriltag_ros<br/>(AprilTag 检测)"]
         end
     end
 
-    CAM -- "/{cam}/image_raw<br/>(零拷贝 intra-process)" --> AT
+    CAM -- "/{cam}/image_raw" --> AT
     CAM -- "/{cam}/image_raw<br/>(BEST_EFFORT, depth=1)" --> QR
     CAM -- "/{cam}/camera_info" --> AT
     CAM -- "/{cam}/camera_info" --> QR
@@ -122,6 +120,7 @@ graph LR
 # 1. 配置环境变量
 cp deploy/basler_camera/.env.example deploy/basler_camera/.env
 # 编辑 .env，设置 CAMERA_ID、CAMERA_CONFIG_FILE 等
+# 当前仓库中的 .env 将 ENABLE_QRCODE=false；需要验收二维码时请改为 true
 
 # 2. 构建镜像（首次或代码变更后）
 docker build -f deploy/basler_camera/Dockerfile -t basler_camera_20260819_v2.0 .
@@ -150,6 +149,7 @@ ENABLE_KEYENCE=false
 # 相机 2：只跑 AprilTag
 CAMERA_ID_2=cam2
 CAMERA_CONFIG_2=/opt/ros2_ws/deploy/basler_camera/config/cam2.yaml
+CAMERA_FRAME_2=basler_cam2
 ENABLE_QRCODE_2=false
 ENABLE_APRILTAG_2=true
 ENABLE_KEYENCE_2=false
@@ -158,6 +158,8 @@ ENABLE_KEYENCE_2=false
 然后正常 `docker compose up -d`，entrypoint 会自动检测 `CAMERA_ID_2` 并启动第二条 pipeline。
 双相机模式下，`CAMERA_CONFIG_2` 为必填项，且 `CAMERA_ID_2` 必须不同于
 `CAMERA_ID`，`CAMERA_CONFIG_2` 必须不同于 `CAMERA_CONFIG_FILE`。
+如果第二路启用 AprilTag，还必须设置与 `CAMERA_FRAME` 不同的 `CAMERA_FRAME_2`，避免 TF frame 冲突。
+AprilTag child frame 同样按相机隔离，例如 `cam1/tag36h11:3` 与 `cam2/tag36h11:3`。
 
 ### 方式三：手动 launch（开发调试用）
 
@@ -200,6 +202,7 @@ ros2 topic echo /{camera_id}/scanner/barcode --once
 | `/{cam}/apriltag/transform` | `geometry_msgs/msg/TransformStamped` | AprilTag 变换 |
 | `/{cam}/qr/decoded_info` | `std_msgs/msg/String` | 二维码解码结果 |
 | `/{cam}/scanner/barcode` | `std_msgs/msg/String` | Keyence 扫码结果 |
+| `/{cam}/vision/status` | `pylon_ros2_camera_interfaces/msg/VisionStatus` | 单路视觉 pipeline 汇总状态和指标 |
 
 | 服务 | 类型 | 说明 |
 |------|------|------|
@@ -207,16 +210,20 @@ ros2 topic echo /{camera_id}/scanner/barcode --once
 
 ## 诊断与监控
 
-节点通过 `/diagnostics` 话题上报运行状态：
+节点通过 `/{camera_id}/diagnostics` 话题上报运行状态：
 
 ```bash
 # 查看所有诊断信息
-ros2 topic echo /diagnostics --once
+ros2 topic echo /my_camera/diagnostics --once
 
 # 重点关注
 # - "Scanner Connection": Keyence 连接状态 + 扫码/错误计数
 # - "AprilTag Status": 检测计数 + 当前跟踪的标签帧
 ```
+
+每路 pipeline 还发布 `/{camera_id}/vision/status`，汇总组件状态、错误信息和诊断 key/value 指标。组件诊断超过 5 秒没有更新时，该路状态为 `STALE`。
+
+当前指标包括相机图像发布 FPS、QR 处理 FPS/耗时/跳过帧数、AprilTag TF 消息频率/处理耗时，以及 Keyence 请求次数/耗时/连续失败次数。
 
 健康检查要求每路相机的 `/{CAMERA_ID}/pylon_ros2_camera_node/camera_info`
 话题类型正确且消息可达；同时，每路 `ENABLE_*` 为 `true` 的模块节点必须存在。
@@ -230,7 +237,7 @@ ros2 topic echo /diagnostics --once
 | 文档 | 路径 |
 |------|------|
 | 故障排查手册 | `项目启动运行指南/故障排查手册.md` |
-| 工控机集成指南 | `项目启动运行指南/工控机ROS2集成与调用超详细指南.md` |
+| 工控机集成与运维指南 | `项目启动运行指南/工控机集成与运维指南.md` |
 | 启动与运行 SOP | `项目启动运行指南/handover_ros2_integration_2026-08-07/02-启动与运行SOP.md` |
 | 测试验收标准 | `项目启动运行指南/handover_ros2_integration_2026-08-07/03-测试方法与验收标准.md` |
 | 依赖安装详单 | `项目启动运行指南/handover_ros2_integration_2026-08-07/06-组件与依赖安装详单.md` |
@@ -251,4 +258,4 @@ git push org main      # 同步到组织仓库
 
 - `build/`、`install/`、`log/` 已通过 `.gitignore` 忽略
 - `main` 默认跟踪个人仓库 `origin/main`
-- 统一容器模式为唯一生产路径，各模块独立容器配置保留但不再主动维护
+- 统一容器模式为唯一生产路径，QR、AprilTag 和 Keyence 的独立容器配置已移除

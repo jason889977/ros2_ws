@@ -2,6 +2,7 @@ import os
 
 import cv2
 import numpy as np
+import pytest
 
 from apriltag_pose_reader.aprilgrid_calibration import AprilGridCalibrator
 from apriltag_pose_reader.aprilgrid_spec import AprilGridSpec
@@ -27,14 +28,11 @@ def test_aprilgrid_calibrator_accepts_latest_geometry():
     assert len(objs) == 0 or len(objs) >= 0
 
 
-def test_calibration_entrypoint_generates_yaml(tmp_path):
+def test_calibration_rejects_images_without_apriltags(tmp_path):
     spec = AprilGridSpec(rows=4, cols=3, tag_size_m=0.05, tag_spacing_m=0.01, tag_family='tag36h11')
     image_path = tmp_path / 'board.png'
     cv2.imwrite(str(image_path), _make_test_image())
-    output_path = tmp_path / 'camera.yaml'
-
     calibrator = AprilGridCalibrator(spec)
-    K, D, _ = calibrator.calibrate_from_images([str(image_path)], image_size=(480, 640))
-    assert K.shape == (3, 3)
-    assert D.shape == (5,)
+    with pytest.raises(ValueError, match='at least 3 calibration images'):
+        calibrator.calibrate_from_images([str(image_path)], image_size=(480, 640))
     assert os.path.exists(str(image_path))

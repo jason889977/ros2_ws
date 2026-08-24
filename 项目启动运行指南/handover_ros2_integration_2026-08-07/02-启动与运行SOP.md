@@ -46,7 +46,7 @@ sudo -n docker exec basler_camera bash -lc \
    ros2 node list'
 ```
 
-统一容器主流程的判据是容器内 `/detections`、`/apriltag/pose` 和 `/wechat_qr_node/decoded_info` 可用。
+统一容器主流程的判据是容器内 `/my_camera/detections`、`/my_camera/apriltag/pose` 和 `/my_camera/qr/decoded_info` 可用；如果 `.env` 中禁用了对应模块，则不检查该模块的话题。
 
 ## 4. 公共可视化入口
 
@@ -76,10 +76,10 @@ sudo -n docker exec basler_camera bash -lc \
 cd /home/ubuntu/ros2_ws
 source /opt/ros/humble/setup.bash
 source install/setup.bash
-ros2 launch pylon_ros2_camera_wrapper ip_configuration.launch.py
+/opt/pylon/bin/pylon_ip_auto_config
 ```
 
-根据终端提示：
+根据厂商工具提示：
 
 - 选择要配置的相机编号
 - 输入目标 IP

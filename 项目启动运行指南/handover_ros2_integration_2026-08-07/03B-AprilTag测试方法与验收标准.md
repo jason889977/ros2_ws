@@ -46,8 +46,8 @@ ros2 topic info -v /my_camera/pylon_ros2_camera_node/image_raw
 
 通过判据:
 - 存在节点 /my_camera/pylon_ros2_camera_node
-- 存在节点 /apriltag
-- 存在节点 /apriltag_pose_reader
+- 存在节点 /my_camera/apriltag
+- 存在节点 /my_camera/apriltag_pose_reader
 - /my_camera/pylon_ros2_camera_node/image_raw: 能实际收到消息
 
 不通过判据:
@@ -61,7 +61,7 @@ ros2 topic info -v /my_camera/pylon_ros2_camera_node/image_raw
 cd /home/ubuntu/ros2_ws
 source /opt/ros/humble/setup.bash
 source install/setup.bash
-ros2 topic echo /detections --once
+ros2 topic echo /my_camera/detections --once
 ```
 
 通过判据:
@@ -79,13 +79,13 @@ ros2 topic echo /detections --once
 cd /home/ubuntu/ros2_ws
 source /opt/ros/humble/setup.bash
 source install/setup.bash
-ros2 topic echo /apriltag/pose --once
-ros2 topic echo /apriltag/transform --once
+ros2 topic echo /my_camera/apriltag/pose --once
+ros2 topic echo /my_camera/apriltag/transform --once
 ```
 
 通过判据:
-- /apriltag/pose 返回 PoseStamped
-- /apriltag/transform 返回 TransformStamped
+- /my_camera/apriltag/pose 返回 PoseStamped
+- /my_camera/apriltag/transform 返回 TransformStamped
 - transform 中 child_frame_id 非空
 
 不通过判据:
@@ -94,7 +94,7 @@ ros2 topic echo /apriltag/transform --once
 ## 6. 测试项 D: TF2 变换连通
 
 步骤:
-1. 从 /apriltag/transform --once 输出中读取 header.frame_id 和 child_frame_id。
+1. 从 /my_camera/apriltag/transform --once 输出中读取 header.frame_id 和 child_frame_id。
 2. 使用以下命令验证连续变换:
 
 ```bash
@@ -119,9 +119,9 @@ rviz2
 ```
 
 建议配置:
-- Fixed Frame 设为 map，或 /apriltag/transform 里的父坐标系
+- Fixed Frame 设为 map，或 /my_camera/apriltag/transform 里的父坐标系
 - Add -> TF
-- Add -> Pose，Topic 选择 /apriltag/pose
+- Add -> Pose，Topic 选择 /my_camera/apriltag/pose
 
 通过判据:
 - 可见标签对应 TF 与 Pose 变化

@@ -38,7 +38,7 @@ ros2 run apriltag_pose_reader apriltag_pipeline \
 
 ```bash
 ros2 topic echo /my_camera/pylon_ros2_camera_node/camera_info --once
-ros2 topic echo /apriltag/transform --once
+ros2 topic echo /my_camera/apriltag/transform --once
 ```
 
 ## 2. 方式 A：离线 CSV 手眼标定
@@ -105,7 +105,7 @@ ros2 topic echo /xarm/robot_states --once
 ```bash
 ros2 topic hz /my_camera/pylon_ros2_camera_node/image_raw
 ros2 topic echo /my_camera/pylon_ros2_camera_node/camera_info --once
-ros2 topic echo /apriltag/transform --once
+ros2 topic echo /my_camera/apriltag/transform --once
 ```
 
 固定使用同一个标签，例如 `tag36h11:3`。
@@ -118,7 +118,7 @@ source /opt/ros/humble/setup.bash
 source install/setup.bash
 ros2 run apriltag_pose_reader xarm_handeye_capture \
   --robot-states-topic /xarm/robot_states \
-  --tag-transform-topic /apriltag/transform \
+  --tag-transform-topic /my_camera/apriltag/transform \
   --target-frame tag36h11:3 \
   --output-dir handeye_dataset \
   --samples 15 \
@@ -130,7 +130,7 @@ ros2 run apriltag_pose_reader xarm_handeye_capture \
 操作员手动将 xArm7 移动到每个新姿态并停稳。程序自动完成：
 
 1. 读取 `/xarm/robot_states`。
-2. 读取 `/apriltag/transform`。
+2. 读取 `/my_camera/apriltag/transform`。
 3. 按时间戳配对。
 4. 过滤时间不同步、重复和运动不足样本。
 5. 写出 `handeye_dataset/poses.csv`。
@@ -173,7 +173,7 @@ $$
 - xArm 驱动未安装或暂时不可用：仍可选择方式 A。
 - 两种方式生成的 CSV 格式相同，但不要混合不同坐标方向或不同单位的数据。
 - 没有 `/xarm/robot_states`：检查 xArm 驱动、命名空间和 `xarm_msgs` 环境。
-- 没有 `/apriltag/transform`：检查相机、CameraInfo、AprilTag family 和目标 ID。
+- 没有 `/my_camera/apriltag/transform`：检查相机、CameraInfo、AprilTag family 和目标 ID。
 - 样本不增加：检查 ROS 时间戳、同步容差以及机器人姿态变化。
 
 ## 6. 旧脚本说明

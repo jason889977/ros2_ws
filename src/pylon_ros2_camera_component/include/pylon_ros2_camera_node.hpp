@@ -1853,6 +1853,8 @@ protected:
   // spinning thread
   std::thread spin_thread_;
   std::atomic<bool> stop_spinning_;
+  std::mutex action_threads_mutex_;
+  std::vector<std::thread> action_threads_;
   // mutex
   std::recursive_mutex grab_mutex_;
 

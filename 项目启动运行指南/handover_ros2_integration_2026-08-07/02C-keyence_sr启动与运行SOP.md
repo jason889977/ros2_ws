@@ -4,8 +4,8 @@
 本文档用于指导统一视觉容器内 `keyence_sr_wrapper` 的启动、运行、联调与基础故障排查。
 
 节点能力：
-- 提供服务 `/scanner/trigger`（`std_srvs/srv/Trigger`）用于触发一次扫码。
-- 发布话题 `/scanner/barcode`（`std_msgs/msg/String`）输出扫码结果。
+- 提供服务 `/my_camera/scanner/trigger`（`std_srvs/srv/Trigger`）用于触发一次扫码。
+- 发布话题 `/my_camera/scanner/barcode`（`std_msgs/msg/String`）输出扫码结果。
 - 支持运行时修改 IP/端口参数并自动重连，无需重启节点。
 - 内置定时后台重连机制，连接断开后自动恢复。
 
@@ -60,7 +60,7 @@ sudo -n docker compose -f /home/ubuntu/ros2_ws/deploy/basler_camera/docker-compo
 ```bash
 sudo -n docker exec basler_camera bash -lc \
   'source /opt/ros/humble/setup.bash && source /opt/ros2_ws/install/setup.bash && \
-   ros2 topic echo /scanner/barcode'
+  ros2 topic echo /my_camera/scanner/barcode'
 ```
 
 ### 5.2 触发一次扫码
@@ -69,12 +69,12 @@ sudo -n docker exec basler_camera bash -lc \
 ```bash
 sudo -n docker exec basler_camera bash -lc \
   'source /opt/ros/humble/setup.bash && source /opt/ros2_ws/install/setup.bash && \
-   ros2 service call /scanner/trigger std_srvs/srv/Trigger {}'
+  ros2 service call /my_camera/scanner/trigger std_srvs/srv/Trigger {}'
 ```
 
 正常情况下：
 - 服务返回 `success: true`，`message` 为扫码内容。
-- 话题 `/scanner/barcode` 同步收到字符串消息。
+- 话题 `/my_camera/scanner/barcode` 同步收到字符串消息。
 
 异常情况下常见返回：
 - `Scanner not connected.`
@@ -94,7 +94,7 @@ sudo -n docker exec basler_camera bash -lc \
 ```bash
 sudo -n docker exec basler_camera bash -lc \
   'source /opt/ros/humble/setup.bash && source /opt/ros2_ws/install/setup.bash && \
-   ros2 param list /keyence_sr_node'
+  ros2 param list /my_camera/keyence_sr_node'
 ```
 
 ### 6.1 运行时参数热重载
@@ -107,12 +107,12 @@ sudo -n docker exec basler_camera bash -lc \
 # 修改 IP，节点自动重连
 sudo -n docker exec basler_camera bash -lc \
   'source /opt/ros/humble/setup.bash && source /opt/ros2_ws/install/setup.bash && \
-   ros2 param set /keyence_sr_node scanner_ip 172.31.0.92'
+  ros2 param set /my_camera/keyence_sr_node scanner_ip 172.31.0.92'
 
 # 修改端口，节点自动重连
 sudo -n docker exec basler_camera bash -lc \
   'source /opt/ros/humble/setup.bash && source /opt/ros2_ws/install/setup.bash && \
-   ros2 param set /keyence_sr_node scanner_port 9005'
+  ros2 param set /my_camera/keyence_sr_node scanner_port 9005'
 ```
 
 节点日志会输出：

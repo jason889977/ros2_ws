@@ -4,16 +4,13 @@
 
 - 不提交完整镜像 .tar 文件
 - 仅提交镜像 Tag / Registry 引用
-- 提供 Dockerfile、Compose 配置、环境变量模板、健康检查、ROS 2 接口说明、smoke test 和更新日志
+- 统一容器提供 Dockerfile、Compose 配置、健康检查、ROS 2 接口说明、smoke test 和更新日志
 
 ## 1. 模块列表
 
 | 模块 | 镜像 Tag | 目录 | 备注 |
 | --- | --- | --- | --- |
 | Basler Camera（统一容器） | `basler_camera_20260819_v2.0` | `deploy/basler_camera` | **生产主路径**，包含全部 5 个节点 |
-| QR Detector（独立容器） | `qrcode_detector_20260818_v1.0` | `deploy/qrcode_detector` | 遗留独立部署，非生产主路径 |
-| AprilTag Pose Reader（独立容器） | `apriltag_pose_reader_20260818_v1.0` | `deploy/apriltag_pose_reader` | 遗留独立部署，非生产主路径 |
-| Keyence SR Wrapper（独立容器） | `keyence_sr_wrapper_20260818_v1.0` | `deploy/keyence_sr_wrapper` | 遗留独立部署，非生产主路径 |
 
 ## 2. Docker 构建与运行
 
@@ -26,33 +23,6 @@ docker compose --env-file deploy/basler_camera/.env \
   -f deploy/basler_camera/docker-compose.yml up -d
 ```
 
-### QR Detector
-
-```bash
-docker build -f deploy/qrcode_detector/Dockerfile -t qrcode_detector_20260818_v1.0 .
-cp deploy/qrcode_detector/.env.example deploy/qrcode_detector/.env
-docker compose --env-file deploy/qrcode_detector/.env \
-  -f deploy/qrcode_detector/docker-compose.yml up -d
-```
-
-### AprilTag Pose Reader
-
-```bash
-docker build -f deploy/apriltag_pose_reader/Dockerfile -t apriltag_pose_reader_20260818_v1.0 .
-cp deploy/apriltag_pose_reader/.env.example deploy/apriltag_pose_reader/.env
-docker compose --env-file deploy/apriltag_pose_reader/.env \
-  -f deploy/apriltag_pose_reader/docker-compose.yml up -d
-```
-
-### Keyence SR Wrapper
-
-```bash
-docker build -f deploy/keyence_sr_wrapper/Dockerfile -t keyence_sr_wrapper_20260818_v1.0 .
-cp deploy/keyence_sr_wrapper/.env.example deploy/keyence_sr_wrapper/.env
-docker compose --env-file deploy/keyence_sr_wrapper/.env \
-  -f deploy/keyence_sr_wrapper/docker-compose.yml up -d
-```
-
 ## 3. 健康检查命令
 
 每个模块都附带 `healthcheck.sh`，用于在容器启动后检查节点是否存活与就绪。
@@ -61,24 +31,6 @@ docker compose --env-file deploy/keyence_sr_wrapper/.env \
 
 ```bash
 docker exec basler_camera /opt/ros2_ws/deploy/basler_camera/healthcheck.sh
-```
-
-### QR
-
-```bash
-docker exec qrcode_detector /opt/ros2_ws/deploy/qrcode_detector/healthcheck.sh
-```
-
-### AprilTag
-
-```bash
-docker exec apriltag_pose_reader /opt/ros2_ws/deploy/apriltag_pose_reader/healthcheck.sh
-```
-
-### Keyence
-
-```bash
-docker exec keyence_sr_wrapper /opt/ros2_ws/deploy/keyence_sr_wrapper/healthcheck.sh
 ```
 
 ## 4. 冒烟测试
@@ -91,32 +43,12 @@ docker exec keyence_sr_wrapper /opt/ros2_ws/deploy/keyence_sr_wrapper/healthchec
 docker exec basler_camera /opt/ros2_ws/deploy/basler_camera/smoke_test.sh
 ```
 
-### QR
-
-```bash
-docker exec qrcode_detector /opt/ros2_ws/deploy/qrcode_detector/smoke_test.sh
-```
-
-### AprilTag
-
-```bash
-docker exec apriltag_pose_reader /opt/ros2_ws/deploy/apriltag_pose_reader/smoke_test.sh
-```
-
-### Keyence
-
-```bash
-docker exec keyence_sr_wrapper /opt/ros2_ws/deploy/keyence_sr_wrapper/smoke_test.sh
-```
-
 ## 5. 环境变量模板
 
-所有模块均提供 `.env.example`，可按需复制为 `.env` 后调整参数。
+统一容器使用 `deploy/basler_camera/.env.example`（如文件已由部署系统提供），可按需复制为 `.env` 后调整参数。
 
 - Basler: `deploy/basler_camera/.env.example`
-- QR: `deploy/qrcode_detector/.env.example`
-- AprilTag: `deploy/apriltag_pose_reader/.env.example`
-- Keyence: `deploy/keyence_sr_wrapper/.env.example`
+- QR、AprilTag 和 Keyence 随统一 `basler_camera` 容器部署。
 
 关键参数包括：
 
@@ -135,13 +67,17 @@ docker exec keyence_sr_wrapper /opt/ros2_ws/deploy/keyence_sr_wrapper/smoke_test
 | `ENABLE_KEYENCE` | `true` | 启用 Keyence 扫码节点 |
 | `CAMERA_ID_2` | _(空)_ | 第二台相机 ID，非空时启动双 pipeline |
 | `CAMERA_CONFIG_2` | _(无默认值)_ | `CAMERA_ID_2` 非空时必填，且必须不同于 `CAMERA_CONFIG_FILE` |
+| `CAMERA_FRAME` | `basler_aca2500_106611_18` | 第一台相机的 TF frame |
+| `CAMERA_FRAME_2` | _(无默认值)_ | 第二路启用 AprilTag 时必填，且必须不同于 `CAMERA_FRAME` |
 | `ENABLE_APRILTAG_2` | `true` | 第二台相机 AprilTag 开关 |
 | `ENABLE_QRCODE_2` | `true` | 第二台相机 QR 开关 |
 | `ENABLE_KEYENCE_2` | `true` | 第二台相机 Keyence 开关 |
 
 双相机模式下，`CAMERA_ID_2` 必须不同于 `CAMERA_ID`。统一 pipeline 的
 `SCANNER_PORT` 必须为 $1$ 至 $65535$ 的整数，`RECONNECT_INTERVAL_S` 必须为有限且不小于 $0$ 的数值。
-独立 QR、AprilTag、Keyence 容器会将 Compose 中对应的环境变量作为 launch 默认参数传入。
+QR、AprilTag、Keyence 均通过统一 `basler_camera` 容器的 pipeline 参数配置。
+每路诊断话题位于 `/{camera_id}/diagnostics`，汇总状态位于
+`/{camera_id}/vision/status`。
 
 ### 资源限制参数
 
@@ -229,6 +165,12 @@ docker exec keyence_sr_wrapper /opt/ros2_ws/deploy/keyence_sr_wrapper/smoke_test
 
 - `/{camera_id}/scanner/trigger` `std_srvs/srv/Trigger`
 
+### Unified pipeline status
+
+- `/{camera_id}/vision/status` `pylon_ros2_camera_interfaces/msg/VisionStatus`
+- 汇总该路视觉 pipeline 的组件状态、错误信息和诊断指标。
+- 状态等级包括 `OK`、`WARN`、`ERROR` 和 `STALE`。
+
 ## 7.5 QoS 与诊断
 
 ### QoS 配置
@@ -239,12 +181,14 @@ docker exec keyence_sr_wrapper /opt/ros2_ws/deploy/keyence_sr_wrapper/smoke_test
 | `camera_info` | RELIABLE | 10 | 内参数据量小，保证可达 |
 | 检测结果 / 位姿 | RELIABLE | 10 | 关键数据，保证可达 |
 
-### 诊断话题 `/diagnostics`
+### 诊断话题 `/{camera_id}/diagnostics`
 
 | 诊断名 | 来源 | 内容 |
 |--------|------|------|
 | `Scanner Connection` | Keyence 节点 | 连接状态、扫码器 IP/端口、累计扫码/错误计数 |
 | `AprilTag Status` | AprilTag 节点 | 检测状态、累计检测/发布计数、当前跟踪的标签帧 |
+
+统一 pipeline 还发布 `/{camera_id}/vision/status`，汇总组件状态和诊断指标，包括图像/TF 处理频率、处理耗时、Keyence 请求耗时以及连续失败次数。
 
 ## 8. 更新日志摘要
 
@@ -263,7 +207,7 @@ docker exec keyence_sr_wrapper /opt/ros2_ws/deploy/keyence_sr_wrapper/smoke_test
 ### AprilTag
 
 - 增加 AprilTag 检测与位姿读取容器配置
-- 统一 `/apriltag/pose` 与 `/apriltag/transform` 输出方式
+- 统一 `/{camera_id}/apriltag/pose` 与 `/{camera_id}/apriltag/transform` 输出方式
 - 完成健康检查和 smoke test
 
 ### Keyence
@@ -309,4 +253,4 @@ docker exec keyence_sr_wrapper /opt/ros2_ws/deploy/keyence_sr_wrapper/smoke_test
 
 ## 9. 交付结论
 
-本次交付中，四个模块均已按照要求整理完毕，文件结构齐全，且均遵循“只提交镜像 Tag，不提交完整镜像 .tar 文件”的原则。该交付物可用于团队部署、Docker Registry 推送和后续交接复核。
+当前交付以 `basler_camera` 统一容器为生产主路径，遵循“只提交镜像 Tag，不提交完整镜像 .tar 文件”的原则。该交付物可用于团队部署、Docker Registry 推送和后续交接复核。

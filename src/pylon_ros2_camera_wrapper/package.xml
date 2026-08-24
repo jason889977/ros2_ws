@@ -29,7 +29,7 @@
   <exec_depend>launch</exec_depend>
   <exec_depend>launch_ros</exec_depend>
 
-<!-- For the test action client nodes -->
+<!-- Dependencies for the optional manual Action client tool -->
   <test_depend>cv_bridge</test_depend>
   <test_depend>image_geometry</test_depend>
 

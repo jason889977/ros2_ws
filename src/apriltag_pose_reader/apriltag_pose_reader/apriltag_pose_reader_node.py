@@ -19,43 +19,28 @@ AprilTag 姿态读取节点
     提供给下游节点（如机械臂控制、导航等）时使用。
 """
 
-# ============================================================================
-# 导入部分
-# ============================================================================
-
 from __future__ import annotations
-# 允许在类型注解中使用尚未定义的类（如用引号包裹的前向引用），Python 3.7+ 支持
 
 from typing import Optional, Set
 
 import time
-# Optional[X] 等价于 X 或 None
-# Set[X] 表示元素类型为 X 的集合
 
 import rclpy
-# rclpy 是 ROS 2 的 Python 客户端库，提供节点创建、消息发布/订阅等核心功能
 
 from diagnostic_updater import DiagnosticStatusWrapper, Updater
 from rclpy.executors import ExternalShutdownException, MultiThreadedExecutor
 from rclpy.node import Node
-# Node 是 ROS 2 节点的基类，所有自定义节点都需要继承它
 
 from geometry_msgs.msg import PoseStamped, TransformStamped
 from diagnostic_msgs.msg import DiagnosticStatus
-# PoseStamped:       带时间戳和坐标系的位姿消息（位置 xyz + 四元数姿态 xyzw）
-# TransformStamped:  带时间戳的坐标变换消息（父坐标系 → 子坐标系的平移 + 旋转）
 
 from tf2_msgs.msg import TFMessage
-# TFMessage: TF 系统的消息类型，包含一组 TransformStamped（通常就是 /tf 话题的消息类型）
 
 from tf2_ros import TransformException
-# 当 TF 查找失败时（如坐标系不存在、超时等）抛出的异常
 
 from tf2_ros import Buffer
-# TF Buffer: 缓存所有收到的坐标变换，支持按时间查询任意两个坐标系之间的变换
 
 from tf2_ros import TransformListener
-# TransformListener: 自动订阅 /tf 话题并将数据填充到 Buffer 中
 
 try:
     from apriltag_msgs.msg import AprilTagDetectionArray
@@ -78,12 +63,10 @@ class AprilTagPoseReader(Node):
     """
 
     def __init__(self) -> None:
-        # 调用父类初始化，节点名称为 'apriltag_pose_reader'
         # 节点名称在 ROS 2 中必须唯一，用于日志、参数命名空间等
         super().__init__('apriltag_pose_reader')
 
         # ------------------------------------------------------------------
-        # 参数声明（declare_parameter）
         # ------------------------------------------------------------------
         # ROS 2 的参数机制：允许在 launch 文件或命令行中覆盖这些默认值
         # 语法: declare_parameter(参数名, 默认值)
@@ -112,6 +95,7 @@ class AprilTagPoseReader(Node):
         # 要跟踪的标签 ID，-1 表示不指定（跟踪所有检测到的标签）
 
         self.declare_parameter('lookup_parent_frame', '')
+        self.declare_parameter('tag_frame_prefix', '')
         # TF 查询时的父坐标系（如 "camera_link"）
         # 留空则自动使用最近收到的 TF 消息中的父坐标系
 
@@ -147,6 +131,7 @@ class AprilTagPoseReader(Node):
         self._tag_family = self._normalize_tag_family(self.get_parameter('tag_family').value)
         self._tag_id = int(self.get_parameter('tag_id').value)
         self._lookup_parent_frame = self.get_parameter('lookup_parent_frame').value
+        self._tag_frame_prefix = str(self.get_parameter('tag_frame_prefix').value).strip('/')
         self._lookup_rate_hz = float(self.get_parameter('lookup_rate_hz').value)
         self._health_log_interval_s = float(self.get_parameter('health_log_interval_s').value)
         self._publish_detection_logs = bool(self.get_parameter('publish_detection_logs').value)
@@ -155,7 +140,6 @@ class AprilTagPoseReader(Node):
         self._tag_timeout_s = float(self.get_parameter('tag_timeout_s').value)
 
         # ------------------------------------------------------------------
-        # 创建发布器（Publisher）
         # ------------------------------------------------------------------
         # create_publisher(消息类型, 话题名, 队列大小)
         # 队列大小 10 表示最多缓存 10 条未发送的消息
@@ -163,7 +147,6 @@ class AprilTagPoseReader(Node):
         self._transform_pub = self.create_publisher(TransformStamped, self.get_parameter('output_transform_topic').value, 10)
 
         # ------------------------------------------------------------------
-        # TF2 系统初始化
         # ------------------------------------------------------------------
         # Buffer: 存储所有收到的坐标变换，形成一个变换树
         self._tf_buffer = Buffer()
@@ -194,9 +177,11 @@ class AprilTagPoseReader(Node):
 
         self._transforms_published = 0
         # 累计发布的变换数量（用于健康日志统计）
+        self._tf_messages_received = 0
+        self._metrics_started_at = time.monotonic()
+        self._last_tf_processing_ms = 0.0
 
         # ------------------------------------------------------------------
-        # 创建订阅器（Subscriber）
         # ------------------------------------------------------------------
 
         # 订阅 /tf 话题：监听坐标变换消息
@@ -287,11 +272,18 @@ class AprilTagPoseReader(Node):
         family = self._normalize_tag_family(getattr(detection, 'family', ''))
         detection_id = int(getattr(detection, 'id', -1))
         if family and detection_id >= 0:
-            return f'{family}:{detection_id}'
+            frame = f'{family}:{detection_id}'
+            if self._tag_frame_prefix:
+                frame = f'{self._tag_frame_prefix}/{frame}'
+            return frame
         return ''
 
     def _is_auto_tag_frame(self, frame_id: str) -> bool:
         """Return whether a TF child frame can be discovered as an AprilTag."""
+        frame_id = frame_id.lstrip('/')
+        prefix = ''
+        if '/' in frame_id:
+            prefix, frame_id = frame_id.rsplit('/', 1)
         family, separator, raw_id = frame_id.partition(':')
         if not separator or not raw_id.isdigit():
             return False
@@ -300,6 +292,8 @@ class AprilTagPoseReader(Node):
             return False
         tag_id = int(raw_id)
         return (
+            (not self._tag_frame_prefix or prefix == self._tag_frame_prefix)
+            and
             (not self._tag_family or family == self._tag_family)
             and (self._tag_id < 0 or tag_id == self._tag_id)
         )
@@ -444,12 +438,20 @@ class AprilTagPoseReader(Node):
         参数:
             msg: TFMessage，包含多个 TransformStamped 的集合
         """
+        started_at = time.monotonic()
+        self._tf_messages_received = getattr(self, '_tf_messages_received', 0) + 1
+        transforms = msg.transforms
+        if self._lookup_parent_frame:
+            transforms = [
+                transform for transform in transforms
+                if transform.header.frame_id == self._lookup_parent_frame
+            ]
         if not self._tag_frame_id:
-            for transform in msg.transforms:
+            for transform in transforms:
                 if self._is_auto_tag_frame(transform.child_frame_id):
                     self._remember_tag_frame(transform.child_frame_id)
 
-        for transform in msg.transforms:
+        for transform in transforms:
             self._tf_buffer.set_transform(transform, 'apriltag_pose_reader')
 
         candidate_frames = self._candidate_frames()
@@ -457,10 +459,12 @@ class AprilTagPoseReader(Node):
             return
 
         # 遍历本条 TF 消息中的所有变换
-        for transform in msg.transforms:
+        for transform in transforms:
             # 只处理子坐标系在候选集合中的变换（即目标标签的变换）
             if transform.child_frame_id in candidate_frames:
                 self._publish_transform(transform)
+        elapsed = max(0.0, time.monotonic() - started_at)
+        self._last_tf_processing_ms = elapsed * 1000.0
 
     def lookup_and_publish_latest(self) -> None:
         """
@@ -539,6 +543,11 @@ class AprilTagPoseReader(Node):
         frames = ','.join(sorted(self._candidate_frames())) or '<none>'
         stat.add('detections_seen', str(self._detections_seen))
         stat.add('transforms_published', str(self._transforms_published))
+        stat.add('tf_messages_received', str(getattr(self, '_tf_messages_received', 0)))
+        stat.add('last_tf_processing_ms', f'{getattr(self, "_last_tf_processing_ms", 0.0):.3f}')
+        elapsed = max(0.0, time.monotonic() - getattr(self, '_metrics_started_at', time.monotonic()))
+        messages = getattr(self, '_tf_messages_received', 0)
+        stat.add('tf_message_rate_hz', f'{messages / elapsed:.3f}' if elapsed > 0.0 else '0.000')
         stat.add('candidate_frames', frames)
         return stat
 

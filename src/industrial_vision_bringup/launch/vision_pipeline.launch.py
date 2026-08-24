@@ -6,6 +6,7 @@ Each detection module (AprilTag, QR, Keyence) can be independently enabled/disab
 
 import os
 import math
+import re
 
 from ament_index_python.packages import get_package_share_directory
 from launch import LaunchDescription
@@ -42,17 +43,90 @@ def parse_scanner_settings(scanner_port_value, reconnect_interval_value):
     return scanner_port, reconnect_interval_s
 
 
+def validate_pipeline_settings(camera_id, camera_frame, mtu_size, respawn,
+                                prefer_wechat_qr):
+    """Validate launch values before creating any ROS actions."""
+    if re.fullmatch(r'[A-Za-z][A-Za-z0-9_]*', str(camera_id)) is None:
+        raise RuntimeError(
+            f'Invalid camera_id={camera_id!r}; expected a ROS-safe identifier.'
+        )
+    if not str(camera_frame).strip():
+        raise RuntimeError('camera_frame must not be empty.')
+    try:
+        mtu_size = int(mtu_size)
+    except (TypeError, ValueError) as error:
+        raise RuntimeError(
+            f'Invalid mtu_size={mtu_size!r}; expected an integer from 576 to 9000.'
+        ) from error
+    if not 576 <= mtu_size <= 9000:
+        raise RuntimeError(
+            f'Invalid mtu_size={mtu_size!r}; expected an integer from 576 to 9000.'
+        )
+    for name, value in (('respawn', respawn),
+                        ('prefer_wechat_qr', prefer_wechat_qr)):
+        if str(value).lower() not in ('true', 'false'):
+            raise RuntimeError(
+                f'Invalid {name}={value!r}; expected true or false.'
+            )
+
+
+def build_tag_frames(camera_id, tag_count=12):
+    """Return unique AprilTag child frames for one camera pipeline."""
+    return [f'{camera_id}/tag36h11:{tag_id}' for tag_id in range(tag_count)]
+
+
+def parse_bool(value, name):
+    """Parse a strict boolean launch value."""
+    normalized = str(value).strip().lower()
+    if normalized not in ('true', 'false'):
+        raise RuntimeError(f'Invalid {name}={value!r}; expected true or false.')
+    return normalized == 'true'
+
+
 def launch_pipeline(context):
     camera_id = context.launch_configurations['camera_id']
     camera_config = context.launch_configurations['camera_config']
     camera_frame = context.launch_configurations['camera_frame']
     startup_user_set = context.launch_configurations['startup_user_set']
+    mtu_size = context.launch_configurations['mtu_size']
+    respawn = parse_bool(context.launch_configurations['respawn'], 'respawn')
     scanner_ip = context.launch_configurations['scanner_ip']
     scanner_port = context.launch_configurations['scanner_port']
     reconnect_interval_s = context.launch_configurations['reconnect_interval_s']
-    enable_apriltag = context.launch_configurations['enable_apriltag']
-    enable_qrcode = context.launch_configurations['enable_qrcode']
-    enable_keyence = context.launch_configurations['enable_keyence']
+    enable_apriltag = parse_bool(
+        context.launch_configurations['enable_apriltag'], 'enable_apriltag'
+    )
+    enable_qrcode = parse_bool(
+        context.launch_configurations['enable_qrcode'], 'enable_qrcode'
+    )
+    enable_keyence = parse_bool(
+        context.launch_configurations['enable_keyence'], 'enable_keyence'
+    )
+    prefer_wechat_qr = parse_bool(
+        context.launch_configurations['prefer_wechat_qr'], 'prefer_wechat_qr'
+    )
+    use_compressed = parse_bool(
+        context.launch_configurations['use_compressed'], 'use_compressed'
+    )
+    min_detect_interval_s = float(
+        context.launch_configurations['min_detect_interval_s']
+    )
+    if not math.isfinite(min_detect_interval_s) or min_detect_interval_s < 0.0:
+        raise RuntimeError('min_detect_interval_s must be finite and non-negative.')
+    validate_pipeline_settings(
+        camera_id,
+        camera_frame,
+        mtu_size,
+        str(respawn).lower(),
+        str(prefer_wechat_qr).lower(),
+    )
+    expected_components = []
+    if enable_apriltag:
+        expected_components.append('AprilTag Status')
+    if enable_qrcode:
+        expected_components.append('QR Detector Status')
+    if enable_keyence:
+        expected_components.append('Scanner Connection')
     scanner_port, reconnect_interval_s = parse_scanner_settings(
         scanner_port,
         reconnect_interval_s,
@@ -68,12 +142,17 @@ def launch_pipeline(context):
     qr_decoded_topic = f'/{camera_id}/qr/decoded_info'
     scanner_barcode_topic = f'/{camera_id}/scanner/barcode'
     scanner_trigger_topic = f'/{camera_id}/scanner/trigger'
+    diagnostics_topic = f'/{camera_id}/diagnostics'
+    vision_status_topic = f'/{camera_id}/vision/status'
 
     detector_config = os.path.join(
         get_package_share_directory('apriltag_pose_reader'),
         'config',
         'apriltag_36h11.yaml',
     )
+    tag_ids = list(range(12))
+    tag_frame_prefix = f'{camera_id}/'
+    tag_frames = build_tag_frames(camera_id, len(tag_ids))
 
     nodes = []
 
@@ -95,6 +174,8 @@ def launch_pipeline(context):
                     camera_config,
                     {
                         'startup_user_set': startup_user_set,
+                        'camera_frame': camera_frame,
+                        'mtu_size': int(mtu_size),
                         'binning_x': 2,
                         'binning_y': 2,
                         'enable_status_publisher': True,
@@ -102,6 +183,7 @@ def launch_pipeline(context):
                     },
                 ],
                 extra_arguments=[{'use_intra_process_comms': True}],
+                remappings=[('/diagnostics', diagnostics_topic)],
             ),
         ],
     )
@@ -116,14 +198,21 @@ def launch_pipeline(context):
         name='apriltag',
         namespace=camera_id,
         output='screen',
-        respawn=True,
+        respawn=respawn,
         respawn_delay=3.0,
-        condition=IfCondition(enable_apriltag),
+        condition=IfCondition(str(enable_apriltag).lower()),
         remappings=[
             ('image_rect', image_topic),
             ('camera_info', camera_info_topic),
+            ('/diagnostics', diagnostics_topic),
         ],
-        parameters=[detector_config],
+        parameters=[detector_config, {
+            'tag': {
+                'ids': tag_ids,
+                'frames': tag_frames,
+                'sizes': [0.05] * len(tag_ids),
+            },
+        }],
     ))
 
     nodes.append(Node(
@@ -132,13 +221,14 @@ def launch_pipeline(context):
         name='apriltag_pose_reader',
         namespace=camera_id,
         output='screen',
-        respawn=True,
+        respawn=respawn,
         respawn_delay=3.0,
-        condition=IfCondition(enable_apriltag),
+        condition=IfCondition(str(enable_apriltag).lower()),
         parameters=[{
             'detections_topic': detections_topic,
             'tf_topic': '/tf',
             'lookup_parent_frame': camera_frame,
+            'tag_frame_prefix': tag_frame_prefix,
             'lookup_rate_hz': 0.0,
             'publish_all_tags': True,
             'output_pose_topic': apriltag_pose_topic,
@@ -146,6 +236,7 @@ def launch_pipeline(context):
             'subscribe_detections': True,
             'publish_detection_logs': False,
         }],
+        remappings=[('/diagnostics', diagnostics_topic)],
     ))
 
     # ------------------------------------------------------------------
@@ -157,20 +248,22 @@ def launch_pipeline(context):
         name='wechat_qr_node',
         namespace=camera_id,
         output='screen',
-        respawn=True,
+        respawn=respawn,
         respawn_delay=3.0,
-        condition=IfCondition(enable_qrcode),
+        condition=IfCondition(str(enable_qrcode).lower()),
         parameters=[{
             'image_topic': image_topic,
             'camera_info_topic': camera_info_topic,
-            'prefer_wechat_qr': True,
+            'prefer_wechat_qr': prefer_wechat_qr,
             'use_camera_info': True,
             'deduplicate_window_s': 0.5,
-            'min_detect_interval_s': 0.2,
-            'use_compressed': False,
+            'min_detect_interval_s': min_detect_interval_s,
+            'use_compressed': use_compressed,
+            'queue_size': 1,
         }],
         remappings=[
             ('~/decoded_info', qr_decoded_topic),
+            ('/diagnostics', diagnostics_topic),
         ],
     ))
 
@@ -183,9 +276,9 @@ def launch_pipeline(context):
         name='keyence_sr_node',
         namespace=camera_id,
         output='screen',
-        respawn=True,
+        respawn=respawn,
         respawn_delay=3.0,
-        condition=IfCondition(enable_keyence),
+        condition=IfCondition(str(enable_keyence).lower()),
         parameters=[{
             'scanner_ip': scanner_ip,
             'scanner_port': scanner_port,
@@ -194,7 +287,23 @@ def launch_pipeline(context):
         remappings=[
             ('~/barcode', scanner_barcode_topic),
             ('~/trigger', scanner_trigger_topic),
+            ('/diagnostics', diagnostics_topic),
         ],
+    ))
+
+    nodes.append(Node(
+        package='industrial_vision_bringup',
+        executable='vision_status_aggregator',
+        name='vision_status_aggregator',
+        namespace=camera_id,
+        output='screen',
+        parameters=[{
+            'camera_id': camera_id,
+            'diagnostics_topic': diagnostics_topic,
+            'output_topic': vision_status_topic,
+            'diagnostic_timeout_s': 5.0,
+            'expected_components': expected_components,
+        }],
     ))
 
     return nodes
@@ -214,6 +323,8 @@ def generate_launch_description():
             default_value='basler_aca2500_106611_18',
         ),
         DeclareLaunchArgument('startup_user_set', default_value='Default'),
+        DeclareLaunchArgument('mtu_size', default_value='1500'),
+        DeclareLaunchArgument('respawn', default_value='true'),
         DeclareLaunchArgument(
             'scanner_ip',
             default_value=os.environ.get('SCANNER_IP', '172.31.0.91'),
@@ -232,5 +343,18 @@ def generate_launch_description():
                               description='Enable QR code detection chain'),
         DeclareLaunchArgument('enable_keyence', default_value='true',
                               description='Enable Keyence scanner node'),
+        DeclareLaunchArgument(
+            'prefer_wechat_qr',
+            default_value=os.environ.get('PREFER_WECHAT_QR', 'true'),
+            description='Prefer the WeChatQR backend when its models are available',
+        ),
+        DeclareLaunchArgument(
+            'min_detect_interval_s',
+            default_value=os.environ.get('MIN_DETECT_INTERVAL_S', '0.2'),
+        ),
+        DeclareLaunchArgument(
+            'use_compressed',
+            default_value=os.environ.get('USE_COMPRESSED', 'false'),
+        ),
         OpaqueFunction(function=launch_pipeline),
     ])

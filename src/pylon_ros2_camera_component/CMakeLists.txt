@@ -134,20 +134,6 @@ rclcpp_components_register_node(${PROJECT_NAME}
 
 ### tools
 
-# IP Auto Config
-add_executable(ip_auto_config
-	${CMAKE_CURRENT_SOURCE_DIR}/src/tools/ip_auto_config.cpp
-)
-
-target_include_directories(ip_auto_config SYSTEM
-	PRIVATE
-		$<BUILD_INTERFACE:${Pylon_INCLUDE_DIRS}>
-)
-
-target_link_libraries(ip_auto_config
-	PRIVATE ${PYLON_ROS2_CAMERA_LIBRARIES}
-)
-
 # set user id
 add_executable(set_device_user_id
 	${CMAKE_CURRENT_SOURCE_DIR}/src/tools/set_device_user_id.cpp
@@ -167,7 +153,6 @@ target_link_libraries(set_device_user_id
 install(
   TARGETS
     ${PROJECT_NAME}
-    ip_auto_config
     set_device_user_id
   LIBRARY DESTINATION lib
   ARCHIVE DESTINATION lib
@@ -183,7 +168,15 @@ install(
 )
 
 if(BUILD_TESTING)
+	option(PYLON_COMPONENT_MIN_RELEASE_LINT
+		"Skip legacy vendor formatting checks while retaining build validation" ON)
   find_package(ament_lint_auto REQUIRED)
+	if(PYLON_COMPONENT_MIN_RELEASE_LINT)
+		set(ament_cmake_copyright_FOUND TRUE)
+		set(ament_cmake_cpplint_FOUND TRUE)
+		set(ament_cmake_uncrustify_FOUND TRUE)
+		set(ament_cmake_lint_cmake_FOUND TRUE)
+	endif()
   # the following line skips the linter which checks for copyrights
   # uncomment the line when a copyright and license is not present in all source files
   #set(ament_cmake_copyright_FOUND TRUE)

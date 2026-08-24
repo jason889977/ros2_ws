@@ -27,14 +27,19 @@ RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
     rm -f /etc/apt/apt.conf.d/docker-clean && \
     printf '%s\n' 'Binary::apt::APT::Keep-Downloaded-Packages "true";' > /etc/apt/apt.conf.d/keep-cache && \
     apt-get update && apt-get install -y --no-install-recommends \
-    build-essential cmake git python3-colcon-common-extensions python3-rosdep \
+    build-essential cmake git python3-colcon-common-extensions python3-rosdep python3-pip \
     libopencv-dev libyaml-cpp-dev \
     python3-opencv python3-yaml \
     ros-humble-apriltag-ros ros-humble-apriltag-msgs \
     ros-humble-camera-info-manager ros-humble-cv-bridge \
-    ros-humble-diagnostic-updater ros-humble-image-geometry \
+    ros-humble-diagnostic-updater ros-humble-diagnostic-msgs ros-humble-image-geometry \
     ros-humble-image-transport ros-humble-pcl-ros \
     ros-humble-rclcpp-components ros-humble-sensor-msgs
+
+# The production QR pipeline uses OpenCV's WeChatQR backend. Keep the Python
+# OpenCV version explicit instead of silently relying on the distro package.
+RUN python3 -m pip install --no-cache-dir --no-deps \
+    opencv-contrib-python-headless==4.8.1.78
 
 # Place the licensed Basler pylon runtime/SDK under deploy/basler_camera/pylon-sdk.
 # The SDK is intentionally not committed to this repository.
@@ -77,6 +82,8 @@ COPY deploy/basler_camera/README.md deploy/basler_camera/ROS2-INTERFACE.md deplo
 
 RUN . /opt/ros/humble/setup.sh && \
     colcon build --symlink-install
+
+RUN python3 -c "import cv2; assert hasattr(cv2, 'wechat_qrcode'), 'OpenCV WeChatQR backend is unavailable'"
 
 COPY deploy/basler_camera/entrypoint.sh /entrypoint.sh
 RUN chmod +x /entrypoint.sh deploy/basler_camera/*.sh

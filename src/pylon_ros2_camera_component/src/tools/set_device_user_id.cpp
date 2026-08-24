@@ -32,44 +32,7 @@
 #include <pylon/PylonIncludes.h>
 
 #include <algorithm>
-#include <unistd.h>
 #include <string>
-
-// Argument parser
-// from https://stackoverflow.com/questions/865668/parsing-command-line-arguments-in-c
-// @author iain
-class InputParser
-{
-public:
-    InputParser (int &argc, char **argv)
-    {
-        for (int i=1; i < argc; ++i)
-        {
-            this->tokens.push_back(std::string(argv[i]));
-        }
-    }
-
-    const std::string& getCmdOption(const std::string &option) const
-    {
-        std::vector<std::string>::const_iterator itr;
-        itr =  std::find(this->tokens.begin(), this->tokens.end(), option);
-        if (itr != this->tokens.end() && ++itr != this->tokens.end())
-        {
-            return *itr;
-        }
-        static const std::string empty_string("");
-        return empty_string;
-    }
-
-    bool cmdOptionExists(const std::string &option) const
-    {
-        return std::find(this->tokens.begin(), this->tokens.end(), option)
-                != this->tokens.end();
-    }
-    
-private:
-    std::vector <std::string> tokens;
-};
 
 bool cmdOptionExists(char** begin, char** end, const std::string& option)
 {
@@ -79,19 +42,32 @@ bool cmdOptionExists(char** begin, char** end, const std::string& option)
 // main
 int main(int argc, char* argv[])
 {
+    const auto print_usage = []()
+    {
+        std::cout << "USAGE:\n"
+                  << "  set_device_user_id DEVICE_USER_ID\n"
+                  << "  set_device_user_id -sn SERIAL DEVICE_USER_ID\n"
+                  << "  set_device_user_id --help\n";
+    };
+
+    if (argc == 2 && std::string(argv[1]) == "--help")
+    {
+        print_usage();
+        return 0;
+    }
+
     bool sn_arg_is_on = false;
     if(cmdOptionExists(argv, argv+argc, "-sn"))
     {
         sn_arg_is_on = true;
     }
 
-    if ((!sn_arg_is_on && (argc < 2)) || (sn_arg_is_on && (argc < 4)))
+    if ((!sn_arg_is_on && argc != 2) ||
+        (sn_arg_is_on && (argc != 4 || std::string(argv[1]) != "-sn")))
     {
         std::cerr << "ERROR: Not enough parameters!" << std::endl;
-        std::cout << "USAGE:" << std::endl;
-        std::cout << "   set_user_id_to_camera DEVICE_USER_ID           " << "\t-> Assign user id to first available camera" << std::endl;
-        std::cout << "   set_user_id_to_camera -sn SERIAL DEVICE_USER_ID" << "\t-> Assign user id to camera specified by serial" << std::endl;
-        std::cout << "TIPS: run IPAutoConfig to get the serials of the available gigE cameras and \"lsusb -v | grep Serial\" to get the serials of the available USB cameras" << std::endl;
+        print_usage();
+        std::cout << "TIPS: run /opt/pylon/bin/pylon_ip_auto_config to get GigE camera serials and \"lsusb -v | grep Serial\" for USB cameras" << std::endl;
         return 1;
     }
 
@@ -158,7 +134,8 @@ int main(int argc, char* argv[])
             if (tl_factory.EnumerateDevices(devices) == 0)
             {
                 std::cout << "No cameras detected!" << std::endl;
-                return false;
+                Pylon::PylonTerminate();
+                return 4;
             }
 
             size_t i = 0;
@@ -188,7 +165,9 @@ int main(int argc, char* argv[])
             if (i == devices.size())
             {
                 std::cout << "Camera with serial " << serial << " not found!" << std::endl
-                        << "Check the serial by running IPAutoConfig for gigE cameras and \"lsusb -v | grep Serial\" for USB cameras" << std::endl;
+                        << "Check the serial by running /opt/pylon/bin/pylon_ip_auto_config for GigE cameras and \"lsusb -v | grep Serial\" for USB cameras" << std::endl;
+                Pylon::PylonTerminate();
+                return 4;
             }
         }
     } 

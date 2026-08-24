@@ -55,6 +55,8 @@ class TestAprilTagFrameFromDetection(unittest.TestCase):
         node._latest_frame_hint = None
         node._candidate_cache = None
         node._candidate_cache_dirty = True
+        node._lookup_parent_frame = ''
+        node._tag_frame_prefix = ''
         node._tf_buffer = MagicMock()
         return node
 

@@ -71,7 +71,7 @@ install(DIRECTORY config/
 		DESTINATION share/${PROJECT_NAME}/config
 		FILES_MATCHING
 		PATTERN "*.yaml"
-		PATTERN "*.yml"
+    PATTERN "*.yml"
 )
 
 install(DIRECTORY launch
@@ -83,65 +83,52 @@ if(BUILD_TESTING)
 
   option(PYLON_WRAPPER_MIN_RELEASE_LINT
     "Skip heavy non-runtime lint checks for minimal release validation" ON)
+  option(PYLON_BUILD_MANUAL_TOOLS
+    "Build manual camera Action client tools" OFF)
 
-  find_package(cv_bridge REQUIRED)
-  find_package(image_geometry REQUIRED)
+  if(PYLON_BUILD_MANUAL_TOOLS)
+    find_package(cv_bridge REQUIRED)
+    find_package(image_geometry REQUIRED)
 
-  if(cv_bridge_VERSION VERSION_GREATER_EQUAL 3.3.0)
-    add_compile_definitions(cv_bridge_HPP)
+    if(cv_bridge_VERSION VERSION_GREATER_EQUAL 3.3.0)
+      add_compile_definitions(cv_bridge_HPP)
+    endif()
+
+    if(image_geometry_VERSION VERSION_GREATER_EQUAL 3.3.0)
+      add_compile_definitions(image_geometry_HPP)
+    endif()
+
+    set(CAMERA_TEST_DEPENDENCIES
+      ${CAMERA_WRAPPER_DEPENDENCIES}
+      cv_bridge
+      image_geometry
+    )
+
+    ### manual tool
+
+    add_library(action_client_test_grab_images SHARED
+      ${CMAKE_CURRENT_SOURCE_DIR}/tools/grab_images_action_client.cpp
+    )
+
+    target_compile_definitions(action_client_test_grab_images
+      PRIVATE "TEST_GRAB_IMAGES_ACTION_CLIENT_BUILDING_DLL")
+
+    ament_target_dependencies(action_client_test_grab_images
+      ${CAMERA_TEST_DEPENDENCIES}
+    )
+
+    rclcpp_components_register_node(action_client_test_grab_images
+      PLUGIN "pylon_ros2_camera::TestGrabImagesActionClient"
+      EXECUTABLE test_grab_images_action_client
+    )
+
+    install(TARGETS
+          action_client_test_grab_images
+      ARCHIVE DESTINATION lib
+      LIBRARY DESTINATION lib
+      RUNTIME DESTINATION lib/${PROJECT_NAME}
+    )
   endif()
-
-  if(image_geometry_VERSION VERSION_GREATER_EQUAL 3.3.0)
-    add_compile_definitions(image_geometry_HPP)
-  endif()
-
-  set(CAMERA_TEST_DEPENDENCIES
-    ${CAMERA_WRAPPER_DEPENDENCIES}
-    cv_bridge
-    image_geometry
-  )
-
-### test
-
-  add_library(action_client_test_grab_images SHARED
-    ${CMAKE_CURRENT_SOURCE_DIR}/test/test_grab_images_action_client.cpp
-  )
-
-  target_compile_definitions(action_client_test_grab_images
-    PRIVATE "TEST_GRAB_IMAGES_ACTION_CLIENT_BUILDING_DLL")
-
-  ament_target_dependencies(action_client_test_grab_images
-    ${CAMERA_TEST_DEPENDENCIES}
-  )
-
-  rclcpp_components_register_node(action_client_test_grab_images
-    PLUGIN "pylon_ros2_camera::TestGrabImagesActionClient"
-    EXECUTABLE test_grab_images_action_client
-  )
-
-  add_library(action_client_test_grab_image SHARED
-    ${CMAKE_CURRENT_SOURCE_DIR}/test/test_grab_image_action_client.cpp
-  )
-
-  target_compile_definitions(action_client_test_grab_image
-    PRIVATE "TEST_GRAB_IMAGE_ACTION_CLIENT_BUILDING_DLL")
-
-  ament_target_dependencies(action_client_test_grab_image
-    ${CAMERA_TEST_DEPENDENCIES}
-  )
-
-  rclcpp_components_register_node(action_client_test_grab_image
-    PLUGIN "pylon_ros2_camera::TestGrabImageActionClient"
-    EXECUTABLE test_grab_image_action_client
-  )
-
-  install(TARGETS
-        action_client_test_grab_images
-        action_client_test_grab_image
-    ARCHIVE DESTINATION lib
-    LIBRARY DESTINATION lib
-    RUNTIME DESTINATION lib/${PROJECT_NAME}
-  )
 
   find_package(ament_lint_auto REQUIRED)
   if(PYLON_WRAPPER_MIN_RELEASE_LINT)
