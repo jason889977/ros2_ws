@@ -2,7 +2,7 @@
 set -euo pipefail
 
 WS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-RVIZ_CONFIG="$WS_DIR/handover_ros2_integration_2026-08-07/rviz/my_camera_image_raw.rviz"
+RVIZ_CONFIG="$WS_DIR/deploy/basler_camera/config/rviz/my_camera_image_raw.rviz"
 
 cd "$WS_DIR"
 # ROS setup 脚本在部分环境会访问未定义变量，临时关闭 nounset 以避免中断。

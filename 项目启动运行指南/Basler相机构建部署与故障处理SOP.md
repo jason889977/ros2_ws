@@ -375,7 +375,10 @@ sudo -n docker compose --env-file deploy/basler_camera/.env -f deploy/basler_cam
 4. 查健康状态：
 
 ```bash
-sudo -n docker inspect --format '{{.State.Status}} {{.State.Health.Status}}' basler_camera
+sudo -n docker inspect --format '{{.State.Status}} {{.State.Health.Status}}' basler_cameraler_camera /opt/ros2_ws/deploy/basler_camera/healthcheck.sh
+
+# 3. 检查 pylon SDK 是否正确安装
+docker exec basler_camera ls /opt/pylon/lib/
 ```
 
 5. 查日志：
