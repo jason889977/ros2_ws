@@ -1,32 +1,37 @@
 # 相机与手眼标定自动化
 
-当前项目统一使用 AprilTag AprilGrid，不再使用棋盘格标定。相机固定在机械臂末端时属于 `eye_in_hand`，AprilGrid 固定在工作台或机器人基座参考系。
+当前项目统一采用 AprilTag AprilGrid 进行高精度标定，取代传统棋盘格标定。当相机刚性固定在机械臂末端法兰时属于 `eye_in_hand`（眼在手上），AprilGrid 标定板固定在工作台或机器人基座参考系。
 
-内参标定完成后，手眼标定有两种可选方式：
+完成相机内参标定后，手眼标定支持以下两种自动化与离线解算方式：
 
-| 方式 | 姿态来源 | 适用场景 |
+| 标定方式 | 姿态数据来源 | 适用场景 |
 | --- | --- | --- |
-| A. 离线 CSV | 用户提供的机器人控制器或历史数据 | 不绑定具体机器人 |
-| B. xArm 7 自动采集 | xArm7 `xarm_ros2` 的 `/xarm/robot_states` | 自动读取 xArm7 末端姿态 |
+| **方式 A：离线 CSV 标定** | 机械臂控制器导出或第三方离线位姿数据 | 通用工业机器人（ABB、KUKA、FANUC、UR 等） |
+| **方式 B：xArm 7 自动同步采集** | 订阅 `xarm_ros2` 的 `/xarm/robot_states` 话题 | xArm7 机械臂全自动高精度同步标定 |
 
-两种方式最终都调用 `scripts/handeye_calibrate.py`，输出固定的 `gripper -> camera` 安装变换。
+两种方式最终均通过 [scripts/handeye_calibrate.py](scripts/handeye_calibrate.py) 进行统一数值解算，输出标准 OpenCV YAML 格式的手眼变换矩阵（${}^{tool0}T_{camera}$）。
 
-## 1. 共用准备
+---
 
-AprilGrid 规格：4 行 × 3 列，共 12 个 `tag36h11`；Tag 边长 50 mm；相邻 Tag 间距 10 mm；中心间距 60 mm。标定板应打印清晰、保持平整，并在手眼采集期间固定不动。
+## 1. 标定前准备与 AprilGrid 规格
+
+- **标定板规格**：4 行 $\times$ 3 列，共 12 个 `tag36h11` 系列标签；标签边长 $50\text{ mm}$；相邻标签黑边间距 $10\text{ mm}$；中心间距 $60\text{ mm}$。
+- **环境准备**：将标定板平整牢固粘贴于硬质平面上，确保标定期间标定板与工作台绝对无相对晃动。
 
 ```bash
 cd /home/ubuntu/ros2_ws
 source /opt/ros/humble/setup.bash
 source install/setup.bash
+
+# 查看标定工具命令行参数说明
 ros2 run apriltag_pose_reader apriltag_calibration --help
 ros2 run apriltag_pose_reader apriltag_pipeline --help
 python3 scripts/handeye_calibrate.py --help
 ```
 
-### 1.1 AprilGrid 内参标定
+### 1.1 AprilGrid 相机内参标定
 
-先准备 15～30 张 AprilGrid 图像，覆盖不同位置、距离、俯仰、偏航和滚转：
+采集 $15 \sim 30$ 张覆盖不同距离、角度、倾斜（俯仰/偏航/滚转）的 AprilGrid 图像保存至目录，执行全自动标定流水线：
 
 ```bash
 ros2 run apriltag_pose_reader apriltag_pipeline \
@@ -34,37 +39,36 @@ ros2 run apriltag_pose_reader apriltag_pipeline \
   --output-dir calibration_output
 ```
 
-输出：`calibration_output/camera_calibration.yaml`。确认 CameraInfo 使用新文件，并重启视觉链路：
+解算完成后，输出标准相机标定配置文件 `calibration_output/camera_calibration.yaml`。将该文件路径配置至相机 YAML 或生产环境后重启视觉节点：
 
 ```bash
 ros2 topic echo /my_camera/pylon_ros2_camera_node/camera_info --once
 ros2 topic echo /my_camera/apriltag/transform --once
 ```
 
-## 2. 方式 A：离线 CSV 手眼标定
+---
 
-### 2.1 采集要求
+## 2. 方式 A：通用离线 CSV 手眼标定
 
-1. 将 AprilGrid 刚性固定在工作台或基座参考系。
-2. 相机刚性安装在机器人末端法兰。
-3. 采集 10～20 个同步样本，推荐 15～20 个。
-4. 样本应覆盖位置、距离、俯仰、偏航和滚转变化。
-5. 每个样本必须同时记录机器人末端姿态和 AprilGrid 在相机中的姿态。
+### 2.1 采集规范
 
-### 2.2 CSV 格式
+1. 将 AprilGrid 标定板刚性固定于工作台。
+2. 相机刚性固定于机械臂末端法兰。
+3. 移动机械臂采集 $15 \sim 20$ 组不同位姿的样本数据，姿态旋转角度变化量应大于 $5^\circ$。
+4. 记录每组对应的机械臂末端在基座下的位姿及标定板在相机坐标系下的位姿。
 
-首行必须为：
+### 2.2 CSV 格式规范
+
+CSV 文件第一行必须为表头：
 
 ```text
 gripper2base_r,gripper2base_t,target2cam_r,target2cam_t
 ```
 
-- `gripper2base_r/t`：末端坐标系在机器人基座坐标系中的姿态。
-- `target2cam_r/t`：AprilGrid 坐标系在相机坐标系中的姿态。
-- 旋转矩阵按行展开为 9 个数，平移为 3 个数，平移单位为米。
-- 控制器若输出 `base2gripper`，必须先求逆，不能只修改字段名。
+- `gripper2base_r/t`：末端法兰在机器人基座坐标系下的姿态（$3 \times 3$ 旋转矩阵按行展开为 9 个数值，平移向量为 3 个数值，单位为米）。
+- `target2cam_r/t`：AprilGrid 标定板在相机光学坐标系下的姿态。
 
-### 2.3 求解
+### 2.3 运行求解
 
 ```bash
 python3 scripts/handeye_calibrate.py \
@@ -77,28 +81,19 @@ python3 scripts/handeye_calibrate.py \
   --target-frame apriltag_board
 ```
 
-可选算法：`tsai`、`park`、`horaud`、`daniilidis`。程序会校验 CSV、旋转矩阵、样本数量和姿态变化，并输出旋转、平移、4x4 矩阵、样本数和闭环误差。
+支持的算法参数包括：`tsai`、`park`、`horaud`、`daniilidis`。解算器将自动校验旋转矩阵正交性、计算重投影与闭环平均平移与旋转误差。
 
-## 3. 方式 B：xArm 7 自动采集
+---
 
-### 3.1 启动 xArm7
+## 3. 方式 B：xArm 7 全自动在线采集与解算
 
-安装并 source 官方 `xarm_ros2` Humble 工作区，将 IP 替换为实际控制器地址：
+### 3.1 启动 xArm 7 驱动
 
 ```bash
 source /opt/ros/humble/setup.bash
 source ~/xarm_ros2/install/setup.bash
 ros2 launch xarm_api xarm7_driver.launch.py robot_ip:=192.168.1.XXX
 ```
-
-检查状态接口：
-
-```bash
-ros2 topic list -t | grep robot_states
-ros2 topic echo /xarm/robot_states --once
-```
-
-`RobotMsg.pose` 为 `[x, y, z, roll, pitch, yaw]`，位置单位为毫米，姿态单位为弧度；采集节点会自动转换为米和旋转矩阵。如果实际命名空间不是 `/xarm`，以 `ros2 topic list -t` 结果为准。
 
 ### 3.2 启动视觉链路
 
@@ -108,14 +103,12 @@ ros2 topic echo /my_camera/pylon_ros2_camera_node/camera_info --once
 ros2 topic echo /my_camera/apriltag/transform --once
 ```
 
-固定使用同一个标签，例如 `tag36h11:3`。
-
-### 3.3 自动采集
+### 3.3 运行自动同步采集节点
 
 ```bash
 cd /home/ubuntu/ros2_ws
-source /opt/ros/humble/setup.bash
-source install/setup.bash
+source /opt/ros/humble/setup.bash && source install/setup.bash
+
 ros2 run apriltag_pose_reader xarm_handeye_capture \
   --robot-states-topic /xarm/robot_states \
   --tag-transform-topic /my_camera/apriltag/transform \
@@ -127,17 +120,9 @@ ros2 run apriltag_pose_reader xarm_handeye_capture \
   --min-rotation-deg 5.0
 ```
 
-操作员手动将 xArm7 移动到每个新姿态并停稳。程序自动完成：
+操作人员手动将机械臂示教到不同的姿态并保持静止，节点将自动基于时间戳同步配对、过滤运动不足的样本，并在达到设定样本数后自动保存 `handeye_dataset/poses.csv`。
 
-1. 读取 `/xarm/robot_states`。
-2. 读取 `/my_camera/apriltag/transform`。
-3. 按时间戳配对。
-4. 过滤时间不同步、重复和运动不足样本。
-5. 写出 `handeye_dataset/poses.csv`。
-
-节点只采集，不调用 `set_position` 或 `set_servo_angle`，不会自动移动机器人。达到目标数量后自动结束；按 `Ctrl-C` 也会保存已有数据。
-
-### 3.4 使用相同求解器
+### 3.4 手眼矩阵解算
 
 ```bash
 python3 scripts/handeye_calibrate.py \
@@ -150,35 +135,29 @@ python3 scripts/handeye_calibrate.py \
   --target-frame apriltag_board
 ```
 
-## 4. 结果与生产应用闭环
+---
 
-### 4.1 标定结果输出
+## 4. 生产应用与 TF 树闭环验证
 
-求解器会输出 OpenCV YAML 格式的标定结果（如 `handeye_dataset/handeye.yaml`），其中包含：
-- `gripper_to_camera_matrix`（${}^{tool0}T_{camera}$，4x4 齐次变换矩阵）
-- `gripper_frame`（默认 `tool0`）与 `camera_frame`（默认 `camera_optical_frame`）
-- 闭环验证平均平移与旋转误差
+### 4.1 数学关系与变换矩阵
 
-核心数学关系为：
+解算结果保存于 YAML 文件中，核心矩阵关系为：
 
 $$
-{}^{gripper}T_{camera}
+{}^{gripper}T_{camera} = {}^{tool0}T_{camera}
 $$
 
-运行时组合为：
+实时运行时，相机在机器人基座坐标系下的位姿通过 TF 树动态合成：
 
 $$
 {}^{base}T_{camera} = {}^{base}T_{gripper} \cdot {}^{gripper}T_{camera}
 $$
 
-不要把手眼输出直接当作静态 `base_link -> camera`。使用未参与标定的新姿态低速验证，并至少重复 3 次。发现轴方向错误、单位错误或米级误差时立即停止机器人。
+### 4.2 接入生产流水线（自动广播静态 TF）
 
-### 4.2 标定结果接入生产运行（静态 TF 自动广播）
+#### 方式一：集成至 vision_pipeline 流水线（推荐）
 
-完成手眼标定后，无需手动计算矩阵或修改下游代码，可通过以下方式一键广播静态 TF：
-
-#### 方式 1：集成到 vision_pipeline 流水线（推荐，生产模式）
-启动流水线时直接传入标定文件路径与世界坐标系参数：
+通过 Launch 参数直接加载手眼标定 YAML 文件：
 
 ```bash
 ros2 launch industrial_vision_bringup vision_pipeline.launch.py \
@@ -187,49 +166,32 @@ ros2 launch industrial_vision_bringup vision_pipeline.launch.py \
   base_frame:=base_link
 ```
 
-若使用 Docker 部署，在 `deploy/basler_camera/.env` 中配置：
+在 [deploy/basler_camera/.env](deploy/basler_camera/.env) 中配置：
+
 ```dotenv
 HANDEYE_CALIBRATION_FILE=/opt/ros2_ws/deploy/basler_camera/config/handeye.yaml
 WORLD_FRAME=world
 BASE_FRAME=base_link
 ```
 
-#### 方式 2：单独启动手眼静态广播节点
+#### 方式二：独立启动静态 TF 广播节点
+
 ```bash
 ros2 run apriltag_pose_reader handeye_static_tf_broadcaster \
   --ros-args -p calibration_file:=handeye_dataset/handeye.yaml
 ```
 
-### 4.3 TF 树闭环与精度验证
+### 4.3 TF 精度闭环验证
 
-1. **检查 TF 树连通性**：
-```bash
-ros2 run tf2_tools view_frames
-# 会在当前目录生成 frames.pdf，确认链路为: world -> base_link -> ... -> tool0 -> camera_optical_frame
-```
-
-2. **实时查询相机在机械臂基座下的位姿**：
+1. **查询相机在基座下的实时位姿**：
 ```bash
 ros2 run tf2_ros tf2_echo base_link camera_optical_frame
 ```
 
-3. **验证目标抓取点闭环**：
-将 AprilTag 或二维码放置在视野内，查询目标物料在机械臂基座坐标系下的坐标：
+2. **静止目标一致性验证**：
+在视野内放置固定 AprilTag 标签，查询其在机械臂基座坐标系下的坐标：
 ```bash
 ros2 run tf2_ros tf2_echo base_link tag36h11:3
 ```
-手动移动机械臂各轴关节，观察 `base_link -> tag36h11:3` 的输出是否保持静止（静态物料在基座坐标系下的坐标不应随机械臂移动而变化，若保持不动则说明手眼标定与 TF 链路完全正确闭环）。
+手动慢速移动机械臂各轴关节，观察终端输出的 `base_link -> tag36h11:3` 位姿坐标。若坐标保持恒定不动（仅有毫米级微小抖动），则证明手眼标定结果与 TF 链路完全正确闭环。
 
-## 5. 方式选择与故障排查
-
-- 有现成机器人姿态 CSV 或使用其他机器人：选择方式 A。
-- 使用 xArm7 且驱动正常：选择方式 B。
-- xArm 驱动未安装或暂时不可用：仍可选择方式 A。
-- 两种方式生成的 CSV 格式相同，但不要混合不同坐标方向或不同单位的数据。
-- 没有 `/xarm/robot_states`：检查 xArm 驱动、命名空间和 `xarm_msgs` 环境。
-- 没有 `/my_camera/apriltag/transform`：检查相机、CameraInfo、AprilTag family 和目标 ID。
-- 样本不增加：检查 ROS 时间戳、同步容差以及机器人姿态变化。
-
-## 6. 旧脚本说明
-
-旧棋盘格脚本已删除，不再作为项目入口。当前正式入口只有 AprilGrid 内参标定、离线 CSV 手眼标定和 xArm7 自动采集。
