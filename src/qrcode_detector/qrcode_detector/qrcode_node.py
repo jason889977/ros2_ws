@@ -253,16 +253,30 @@ class WeChatQRNode(Node):
 
         if self._use_camera_info:
             self._pose_pub = self.create_publisher(PoseStamped, '~/qr_pose', 10)
-            self._camera_info_sub = self.create_subscription(
-                CameraInfo,
-                camera_info_topic,
-                self._camera_info_callback,
-                QoSProfile(
-                    reliability=ReliabilityPolicy.RELIABLE,
-                    history=HistoryPolicy.KEEP_LAST,
-                    depth=self._queue_size,
-                ),
+            # Camera info must use the same BEST_EFFORT reliability as the camera
+            # driver's CameraPublisher (image_raw/camera_info share one QoS there).
+            # A RELIABLE subscriber never matches the BEST_EFFORT publisher and the
+            # pose estimation would silently never receive intrinsics.
+            camera_info_qos = QoSProfile(
+                reliability=ReliabilityPolicy.BEST_EFFORT,
+                history=HistoryPolicy.KEEP_LAST,
+                depth=self._queue_size,
             )
+            if self._use_compressed:
+                # Camera info itself is always raw (not compressed).
+                self._camera_info_sub = self.create_subscription(
+                    CameraInfo,
+                    camera_info_topic,
+                    self._camera_info_callback,
+                    camera_info_qos,
+                )
+            else:
+                self._camera_info_sub = self.create_subscription(
+                    CameraInfo,
+                    camera_info_topic,
+                    self._camera_info_callback,
+                    camera_info_qos,
+                )
             self.get_logger().info(
                 f'use_camera_info 已启用，订阅 {camera_info_topic}，'
                 f'qr_size_m={self._qr_size_m}'
@@ -378,7 +392,19 @@ class WeChatQRNode(Node):
         """
         if self._camera_matrix is not None:
             return
-        self._camera_matrix = np.array(msg.k, dtype=np.float64).reshape(3, 3)
+        camera_matrix = np.array(msg.k, dtype=np.float64).reshape(3, 3)
+        # Reject placeholder/un-calibrated intrinsics (fx or fy near 1.0) so
+        # solvePnP never runs on a meaningless model. The default repo calib
+        # file ships fx=fy=1.0 which previously produced wrong poses silently.
+        fx = camera_matrix[0, 0]
+        fy = camera_matrix[1, 1]
+        if fx <= 1.0 or fy <= 1.0:
+            self.get_logger().error(
+                f'相机内参疑似占位符 (fx={fx}, fy={fy})，qr_pose 位姿估计已禁用；'
+                '请先完成相机标定并更新 camera_info_url 指向的 calib.yaml。'
+            )
+            return
+        self._camera_matrix = camera_matrix
         self._dist_coeffs = np.array(msg.d, dtype=np.float64)
         self._camera_frame_id = msg.header.frame_id
         self.get_logger().info(

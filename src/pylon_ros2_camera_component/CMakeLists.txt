@@ -52,6 +52,12 @@ else()
     message(STATUS "Pylon blaze support: DISABLED (pylon/BlazeInstantCamera.h not found)")
 endif()
 
+if(NOT DEFINED ENV{AMENT_PREFIX_PATH} AND NOT DEFINED ament_cmake_DIR)
+  message(FATAL_ERROR
+    "ament_cmake not found. Source a ROS 2 environment before configuring this package, for example: source /opt/ros/$ENV{ROS_DISTRO}/setup.bash"
+  )
+endif()
+
 find_package(ament_cmake REQUIRED)
 find_package(pylon_ros2_camera_interfaces REQUIRED)
 find_package(rclcpp REQUIRED)

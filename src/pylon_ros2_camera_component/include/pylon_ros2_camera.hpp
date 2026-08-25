@@ -32,6 +32,8 @@
 #include <vector>
 #include <map>
 #include <memory>
+#include <atomic>
+#include <mutex>
 
 #include "sensor_msgs/msg/camera_info.hpp"
 #include "sensor_msgs/msg/region_of_interest.hpp"
@@ -1283,11 +1285,32 @@ public:
      * Cached flags set once after grabbing starts to avoid per-frame overhead.
      * chunk_mode_active_: true if chunk mode is enabled (read-only after init).
      * bit_shift_active_: true if 12-bit left-shift is needed; reset when encoding changes.
+     *
+     * These are written from the service/executor thread and read from the spin
+     * thread, so they must be atomic to avoid undefined behaviour.
      */
-    bool chunk_mode_active_{false};
-    bool chunk_timestamp_enabled_{false};
+    std::atomic<bool> chunk_mode_active_{false};
+    std::atomic<bool> chunk_timestamp_enabled_{false};
+    std::atomic<bool> bit_shift_active_{false};
+
+    /**
+     * Thread-safe accessors for the cached ROS image encoding. Written by the
+     * service thread (setImageEncoding), read from the spin thread each frame.
+     */
+    void setCachedRosEncoding(const std::string& encoding)
+    {
+      std::lock_guard<std::mutex> lock(this->cached_ros_encoding_mutex_);
+      this->cached_ros_encoding_ = encoding;
+    }
+    std::string cachedRosEncoding() const
+    {
+      std::lock_guard<std::mutex> lock(this->cached_ros_encoding_mutex_);
+      return this->cached_ros_encoding_;
+    }
+
+private:
+    mutable std::mutex cached_ros_encoding_mutex_;
     std::string cached_ros_encoding_;
-    bool bit_shift_active_{false};
 
 protected:
     /**

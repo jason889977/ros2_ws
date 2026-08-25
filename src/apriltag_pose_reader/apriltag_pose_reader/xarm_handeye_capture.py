@@ -33,6 +33,19 @@ def _rotation_from_rotvec(rotvec: np.ndarray) -> np.ndarray:
     return cv2.Rodrigues(np.asarray(rotvec, dtype=np.float64).reshape(3, 1))[0]
 
 
+def _rotation_from_rpy(roll: float, pitch: float, yaw: float) -> np.ndarray:
+    """Convert xArm extrinsic roll/pitch/yaw (radians, XYZ convention) to a 3x3 rotation matrix."""
+    cr, sr = math.cos(roll), math.sin(roll)
+    cp, sp = math.cos(pitch), math.sin(pitch)
+    cy, sy = math.cos(yaw), math.sin(yaw)
+    # R = Rz(yaw) @ Ry(pitch) @ Rx(roll)
+    return np.array([
+        [cy * cp, cy * sp * sr - sy * cr, cy * sp * cr + sy * sr],
+        [sy * cp, sy * sp * sr + cy * cr, sy * sp * cr - cy * sr],
+        [-sp, cp * sr, cp * cr],
+    ], dtype=np.float64)
+
+
 def _rotation_angle(rotation: np.ndarray) -> float:
     return float(np.linalg.norm(cv2.Rodrigues(rotation)[0]))
 
@@ -51,14 +64,20 @@ def _rotation_from_quaternion(quaternion: list[float]) -> np.ndarray:
 
 
 def xarm_pose_to_transform(pose: list[float] | tuple[float, ...]) -> np.ndarray:
-    """Convert xArm [mm, mm, mm, roll, pitch, yaw] to a 4x4 transform."""
+    """Convert xArm [mm, mm, mm, roll, pitch, yaw] to a 4x4 transform.
+
+    The orientation part (pose[3:]) of an xArm RobotMsg pose is expressed in
+    extrinsic XYZ Euler angles (roll/pitch/yaw in radians), NOT an axis-angle
+    rotation vector. Feeding RPY into cv2.Rodrigues yields a wrong rotation
+    for any multi-axis orientation.
+    """
     if len(pose) != 6:
         raise ValueError(f'xArm pose must contain 6 values, got {len(pose)}')
     values = np.asarray(pose, dtype=np.float64)
     if not np.all(np.isfinite(values)):
         raise ValueError('xArm pose contains non-finite values')
     result = np.eye(4, dtype=np.float64)
-    result[:3, :3] = _rotation_from_rotvec(values[3:])
+    result[:3, :3] = _rotation_from_rpy(values[3], values[4], values[5])
     result[:3, 3] = values[:3] / 1000.0
     return result
 

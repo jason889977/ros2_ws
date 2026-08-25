@@ -1654,6 +1654,16 @@ protected:
    */
   bool isSleeping();
 
+  /**
+   * @brief Spawn a detached action-execution thread with bounded bookkeeping.
+   *
+   * action_threads_ previously grew without bound because every accepted goal
+   * appended a thread that was only joined in the destructor. Here we reap the
+   * oldest finished threads once a soft cap is exceeded so a long-running node
+   * does not accumulate thread objects.
+   */
+  void spawnActionThread(std::function<void()> work);
+
 protected:
 
   template<typename ServiceT, typename CallbackT>

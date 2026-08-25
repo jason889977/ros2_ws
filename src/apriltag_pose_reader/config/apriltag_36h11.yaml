@@ -1,6 +1,10 @@
 apriltag:
   ros__parameters:
     image_transport: raw
+    # Subscribe with BEST_EFFORT (sensor_data) to match the camera driver QoS.
+    # The default 'default' profile relies on Fast-DDS resolving system-default
+    # readers to best-effort, which silently breaks under other RMWs.
+    qos_profile: sensor_data
     family: 36h11
     size: 0.05
     profile: false

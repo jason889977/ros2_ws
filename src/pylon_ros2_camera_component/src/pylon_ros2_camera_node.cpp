@@ -119,6 +119,14 @@ PylonROS2CameraNode::PylonROS2CameraNode(const rclcpp::NodeOptions& options)
     // thread, e.g. for an external trigger pulse to arrive. Without this,
     // Ctrl-C hangs until the next trigger fires or grab_timeout_ expires
     // (issue #275).
+    //
+    // IMPORTANT: call the low-level camera->grabbingStopping() directly, NOT
+    // the node-level grabbingStopping() which acquires grab_mutex_. The spin
+    // thread may be holding grab_mutex_ while blocked inside RetrieveResult(),
+    // so taking the same (recursive-from-this-thread, but not across threads)
+    // mutex here would deadlock the shutdown path.
+    // Pylon::CInstantCamera::StopGrabbing() is documented thread-safe and is
+    // the canonical way to interrupt a pending RetrieveResult().
     if (this->pylon_camera_ != nullptr)
     {
       this->pylon_camera_->grabbingStopping();
@@ -208,21 +216,21 @@ bool PylonROS2CameraNode::init()
   // cache flags to avoid per-frame string comparisons in the grab path
   this->pylon_camera_->chunk_mode_active_ = (this->pylon_camera_->getChunkModeActive() == 1);
   // 缓存 chunk timestamp 状态，避免每帧 2 次 GenICam 网络往返
-  if (this->pylon_camera_->chunk_mode_active_)
+  if (this->pylon_camera_->chunk_mode_active_.load())
   {
     const std::string success = this->pylon_camera_->setChunkSelector(29);
     this->pylon_camera_->chunk_timestamp_enabled_ =
       (success.find("done") != std::string::npos && this->pylon_camera_->getChunkEnable() == 1);
   }
   const std::string ros_enc = this->pylon_camera_->currentROSEncoding();
-  this->pylon_camera_->cached_ros_encoding_ = ros_enc;
+  this->pylon_camera_->setCachedRosEncoding(ros_enc);
   const std::string gen_api_enc = this->pylon_camera_->currentBaslerEncoding();
   this->pylon_camera_->bit_shift_active_ = encodingconversions::is_12_bit_ros_enc(ros_enc) &&
       (gen_api_enc == "BayerRG12" || gen_api_enc == "BayerBG12" || gen_api_enc == "BayerGB12" ||
        gen_api_enc == "BayerGR12" || gen_api_enc == "Mono12");
-  if (this->pylon_camera_->chunk_mode_active_)
+  if (this->pylon_camera_->chunk_mode_active_.load())
     RCLCPP_INFO(LOGGER, "Activated chunk mode");
-  if (this->pylon_camera_->bit_shift_active_)
+  if (this->pylon_camera_->bit_shift_active_.load())
     RCLCPP_INFO(LOGGER, "Activated bit shifting");
 
   return true;
@@ -884,9 +892,26 @@ bool PylonROS2CameraNode::startGrabbing()
       }
     }
 
+    // Warn loudly if the loaded calibration looks like a placeholder
+    // (fx/fy near 1.0). Downstream AprilTag/QR pose estimation would silently
+    // produce wrong 6D poses on such intrinsics.
     if (this->camera_info_manager_->isCalibrated())
     {
-      RCLCPP_INFO_ONCE(LOGGER, "Camera is calibrated (at startup)");
+      const auto cam_info_check = this->camera_info_manager_->getCameraInfo();
+      const double fx = cam_info_check.k[0];
+      const double fy = cam_info_check.k[4];
+      if (fx <= 1.0 || fy <= 1.0)
+      {
+        RCLCPP_WARN_THROTTLE(LOGGER, *this->get_clock(), 5000,
+          "Intrinsic calibration looks like a PLACEHOLDER (fx=%.2f, fy=%.2f). "
+          "AprilTag/QR pose estimation will be numerically WRONG. "
+          "Run the calibration pipeline and update camera_info_url.",
+          fx, fy);
+      }
+      else
+      {
+        RCLCPP_INFO_ONCE(LOGGER, "Camera is calibrated (at startup)");
+      }
     }
     else
     {
@@ -1205,9 +1230,10 @@ void PylonROS2CameraNode::spin()
       }
 
       // Check if the image encoding changed (using cached value to avoid per-frame GenICam read)
-      if (this->pylon_camera_parameter_set_.imageEncoding() != this->pylon_camera_->cached_ros_encoding_)
+      const std::string cached_enc = this->pylon_camera_->cachedRosEncoding();
+      if (this->pylon_camera_parameter_set_.imageEncoding() != cached_enc)
       {
-        this->pylon_camera_parameter_set_.setimageEncodingParam(*this, this->pylon_camera_->cached_ros_encoding_);
+        this->pylon_camera_parameter_set_.setimageEncodingParam(*this, cached_enc);
         this->grabbingStopping();
         this->grabbingStarting();
       }
@@ -4100,7 +4126,7 @@ void PylonROS2CameraNode::setImageEncodingCallback(const std::shared_ptr<SetStri
   {
     response->success = true;
     pylon_camera_parameter_set_.setimageEncodingParam(*this,request->value);
-    this->pylon_camera_->cached_ros_encoding_ = this->pylon_camera_->currentROSEncoding();
+    this->pylon_camera_->setCachedRosEncoding(this->pylon_camera_->currentROSEncoding());
   }
   else 
   {
@@ -4721,11 +4747,28 @@ void PylonROS2CameraNode::handleGrabRawImagesActionGoalAccepted(const std::share
 {
   RCLCPP_DEBUG(LOGGER, "PylonROS2CameraNode::handleGrabRawImagesActionGoalAccepted -> Goal has been accepted, starting the thread");
 
-  using namespace std::placeholders;
   // this needs to return quickly to avoid blocking the executor, so spin up a new thread
+  this->spawnActionThread([this, goal_handle]() { this->executeGrabRawImagesAction(goal_handle); });
+}
+
+void PylonROS2CameraNode::spawnActionThread(std::function<void()> work)
+{
+  // Soft cap on retained action threads. Beyond it we join the oldest ones:
+  // a thread that is still running will simply block join briefly, but with a
+  // cap of 16 the oldest threads have almost always finished already, so the
+  // steady-state executor is not blocked and the vector does not grow forever.
+  constexpr std::size_t kMaxRetainedActionThreads = 16;
   std::lock_guard<std::mutex> lock(this->action_threads_mutex_);
-  this->action_threads_.emplace_back(
-    std::bind(&PylonROS2CameraNode::executeGrabRawImagesAction, this, _1), goal_handle);
+  while (this->action_threads_.size() >= kMaxRetainedActionThreads)
+  {
+    std::thread oldest = std::move(this->action_threads_.front());
+    this->action_threads_.erase(this->action_threads_.begin());
+    if (oldest.joinable())
+    {
+      oldest.join();
+    }
+  }
+  this->action_threads_.emplace_back(std::move(work));
 }
 
 void PylonROS2CameraNode::executeGrabRawImagesAction(const std::shared_ptr<GrabImagesGoalHandle> goal_handle)
@@ -4757,11 +4800,8 @@ void PylonROS2CameraNode::handleGrabRectImagesActionGoalAccepted(const std::shar
 {
   RCLCPP_DEBUG(LOGGER, "PylonROS2CameraNode::handleGrabRectImagesActionGoalAccepted -> Goal has been accepted, starting the thread");
 
-  using namespace std::placeholders;
   // this needs to return quickly to avoid blocking the executor, so spin up a new thread
-  std::lock_guard<std::mutex> lock(this->action_threads_mutex_);
-  this->action_threads_.emplace_back(
-    std::bind(&PylonROS2CameraNode::executeGrabRectImagesAction, this, _1), goal_handle);
+  this->spawnActionThread([this, goal_handle]() { this->executeGrabRectImagesAction(goal_handle); });
 }
 
 void PylonROS2CameraNode::executeGrabRectImagesAction(const std::shared_ptr<GrabImagesGoalHandle> goal_handle)
@@ -4842,11 +4882,8 @@ void PylonROS2CameraNode::handleGrabBlazeDataActionGoalAccepted(const std::share
 {
   RCLCPP_DEBUG(LOGGER, "PylonROS2CameraNode::handleGrabBlazeDataActionGoalAccepted -> Goal has been accepted, starting the thread");
 
-  using namespace std::placeholders;
   // this needs to return quickly to avoid blocking the executor, so spin up a new thread
-  std::lock_guard<std::mutex> lock(this->action_threads_mutex_);
-  this->action_threads_.emplace_back(
-    std::bind(&PylonROS2CameraNode::executeGrabBlazeDataAction, this, _1), goal_handle);
+  this->spawnActionThread([this, goal_handle]() { this->executeGrabBlazeDataAction(goal_handle); });
 }
 
 void PylonROS2CameraNode::executeGrabBlazeDataAction(const std::shared_ptr<GrabBlazeDataGoalHandle> goal_handle)
@@ -5015,6 +5052,19 @@ void PylonROS2CameraNode::createCameraInfoDiagnostics(diagnostic_updater::Diagno
 {
   if (this->camera_info_manager_->isCalibrated())
   {
+    const auto cam_info = this->camera_info_manager_->getCameraInfo();
+    const double fx = cam_info.k[0];
+    const double fy = cam_info.k[4];
+    if (fx <= 1.0 || fy <= 1.0)
+    {
+      // Placeholder calibration (fx/fy near 1.0) makes downstream pose
+      // estimation numerically wrong; surface it as a diagnostic warning.
+      stat.summary(diagnostic_msgs::msg::DiagnosticStatus::WARN,
+                   "Intrinsic calibration is a placeholder (fx/fy near 1.0); pose output is invalid");
+      stat.add("fx", fx);
+      stat.add("fy", fy);
+      return;
+    }
     stat.summaryf(diagnostic_msgs::msg::DiagnosticStatus::OK, "Intrinsic calibration found");
   }
   else
@@ -5342,23 +5392,61 @@ std::shared_ptr<GrabImagesAction::Result> PylonROS2CameraNode::grabRawImages(con
 
   std::lock_guard<std::recursive_mutex> lock(this->grab_mutex_);
 
-  float previous_exp, previous_gain, previous_gamma;
+  // RAII guard: restore the camera's previous exposure/gain/gamma no matter
+  // which path we leave through (success, early cancel, or failure break).
+  // Previously the cancel path returned early and left the modified settings
+  // active on the camera.
+  struct SettingsRestoreGuard
+  {
+    PylonROS2CameraNode* self;
+    const std::shared_ptr<const GrabImagesAction::Goal> goal;
+    float previous_exp{0.0f};
+    float previous_gain{0.0f};
+    float previous_gamma{0.0f};
+
+    ~SettingsRestoreGuard()
+    {
+      if (!self->pylon_camera_)
+      {
+        return;
+      }
+      float reached_val;
+      if (goal->exposure_given)
+      {
+        self->setExposure(previous_exp, reached_val);
+      }
+      if (goal->gain_given)
+      {
+        self->setGain(previous_gain, reached_val);
+      }
+      if (goal->gamma_given)
+      {
+        self->setGamma(previous_gamma, reached_val);
+      }
+      if (goal->brightness_given)
+      {
+        self->setGain(previous_gain, reached_val);
+        self->setExposure(previous_exp, reached_val);
+      }
+    }
+  } restore_guard{this, goal};
+
   if (goal->exposure_given)
   {
-    previous_exp = this->pylon_camera_->currentExposure();
+    restore_guard.previous_exp = this->pylon_camera_->currentExposure();
   }
   if (goal->gain_given)
   {
-    previous_gain = this->pylon_camera_->currentGain();
+    restore_guard.previous_gain = this->pylon_camera_->currentGain();
   }
   if (goal->gamma_given)
   {
-    previous_gamma = this->pylon_camera_->currentGamma();
+    restore_guard.previous_gamma = this->pylon_camera_->currentGamma();
   }
   if (goal->brightness_given)
   {
-    previous_gain = this->pylon_camera_->currentGain();
-    previous_exp = this->pylon_camera_->currentExposure();
+    restore_guard.previous_gain = this->pylon_camera_->currentGain();
+    restore_guard.previous_exp = this->pylon_camera_->currentExposure();
   }
 
   RCLCPP_DEBUG_STREAM(LOGGER, "Number of images to be grabbed: " << n_images);
@@ -5466,26 +5554,7 @@ std::shared_ptr<GrabImagesAction::Result> PylonROS2CameraNode::grabRawImages(con
     result->cam_info = this->camera_info_manager_->getCameraInfo();
   }
 
-  // restore previous settings:
-  float reached_val;
-  if (goal->exposure_given)
-  {
-    this->setExposure(previous_exp, reached_val);
-  }
-  if (goal->gain_given)
-  {
-    this->setGain(previous_gain, reached_val);
-  }
-  if (goal->gamma_given)
-  {
-    this->setGamma(previous_gamma, reached_val);
-  }
-  if (goal->brightness_given)
-  {
-    this->setGain(previous_gain, reached_val);
-    this->setExposure(previous_exp, reached_val);
-  }
-
+  // previous settings are restored by the RAII guard (covers cancel/failure too)
   return result;
 }
 
@@ -5522,7 +5591,9 @@ bool PylonROS2CameraNode::waitForCamera(const std::chrono::duration<double>& tim
 {
   bool result = false;
   rclcpp::Time start_time = rclcpp::Node::now();
-  rclcpp::Rate r(0.02);
+  // 50 Hz polling (period = 20 ms). The previous Rate(0.02) slept 50 seconds
+  // per iteration, freezing the whole driver far beyond the 3 s timeout.
+  rclcpp::Rate r(50.0);
 
   while (rclcpp::ok())
   {
