@@ -112,8 +112,8 @@ graph LR
     CAM2["Basler #2"] --> P2
     KEY1["Keyence #1"] --> P1
 
-    P1 --> "/cam1/qr/decoded_info"
-    P2 --> "/cam2/apriltag/pose"
+    P1 --> OUT1["/cam1/qr/decoded_info"]
+    P2 --> OUT2["/cam2/apriltag/pose"]
 ```
 
 ## 环境要求

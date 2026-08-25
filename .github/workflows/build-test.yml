@@ -9,7 +9,7 @@ on:
 jobs:
   build-and-test:
     runs-on: ubuntu-22.04
-    container: osrf/ros:humble-ros-base-jammy
+    container: swr.cn-north-4.myhuaweicloud.com/ddn-k8s/docker.io/ros:humble-ros-base
     steps:
       - uses: actions/checkout@v4
 
