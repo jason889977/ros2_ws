@@ -10,37 +10,69 @@ jobs:
   build-and-test:
     runs-on: ubuntu-22.04
     container: swr.cn-north-4.myhuaweicloud.com/ddn-k8s/docker.io/ros:humble-ros-base
+    env:
+      PYLON_ROOT: /opt/pylon
+      GENICAM_GENTL64_PATH: /opt/pylon/lib/gentlproducer/gtl
+      LD_LIBRARY_PATH: /opt/pylon/lib
+      PATH: /opt/pylon/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
     steps:
       - uses: actions/checkout@v4
 
-      - name: Install Python test deps
+      - name: Install dependencies and system packages
         run: |
           apt-get update
-          apt-get install -y python3-pytest python3-opencv python3-numpy \
+          apt-get install -y --no-install-recommends \
+            libusb-1.0-0-dev libyaml-cpp-dev libopencv-dev \
+            python3-pytest python3-opencv python3-numpy \
             ros-humble-cv-bridge ros-humble-sensor-msgs ros-humble-std-msgs \
             ros-humble-std-srvs ros-humble-tf2-ros ros-humble-tf2-msgs \
             ros-humble-geometry-msgs ros-humble-apriltag-msgs \
+            ros-humble-camera-info-manager ros-humble-image-geometry \
+            ros-humble-image-transport ros-humble-image-transport-plugins \
+            ros-humble-pcl-ros ros-humble-rclcpp-components \
             ros-humble-diagnostic-msgs ros-humble-diagnostic-updater \
             ros-humble-rclpy ros-humble-ament-copyright \
             ros-humble-ament-flake8 ros-humble-ament-pep257
 
+      - name: Install Basler Pylon SDK
+        run: |
+          SDK_DIR="deploy/basler_camera/pylon-sdk"
+          if [ ! -d "$SDK_DIR" ] && [ -d "ros2_ws/$SDK_DIR" ]; then
+            SDK_DIR="ros2_ws/$SDK_DIR"
+          fi
+          mkdir -p /tmp/pylon-installer
+          tar_archive=$(find "$SDK_DIR" -maxdepth 1 -type f -name '*.tar.gz' | sort | head -n 1)
+          if [ -n "$tar_archive" ]; then
+            echo "Extracting $tar_archive..."
+            tar -xzf "$tar_archive" -C /tmp/pylon-installer
+          fi
+          if find /tmp/pylon-installer -maxdepth 1 -type f -name '*.deb' | grep -q .; then
+            echo "Installing Pylon deb packages..."
+            apt-get install -y --no-install-recommends /tmp/pylon-installer/*.deb
+          else
+            setup_tar=$(find "$SDK_DIR" /tmp/pylon-installer -maxdepth 1 -type f -name '*_setup.tar.gz' 2>/dev/null | head -n 1)
+            if [ -n "$setup_tar" ]; then
+              echo "Extracting setup tarball $setup_tar to /opt/pylon..."
+              mkdir -p /opt/pylon
+              tar -xzf "$setup_tar" -C /opt/pylon
+            else
+              echo "ERROR: No valid Pylon SDK installer found in $SDK_DIR" >&2
+              exit 1
+            fi
+          fi
+          rm -rf /tmp/pylon-installer
+
+      - name: Configure environment variables
+        run: |
+          echo "PYLON_ROOT=/opt/pylon" >> $GITHUB_ENV
+          echo "GENICAM_GENTL64_PATH=/opt/pylon/lib/gentlproducer/gtl" >> $GITHUB_ENV
+          echo "/opt/pylon/bin" >> $GITHUB_PATH
+          echo "LD_LIBRARY_PATH=/opt/pylon/lib:${LD_LIBRARY_PATH:-}" >> $GITHUB_ENV
+
       - name: Build workspace
         run: |
           . /opt/ros/humble/setup.sh
-          colcon build --symlink-install --packages-select \
-            pylon_ros2_camera_interfaces \
-            apriltag_pose_reader keyence_sr_wrapper qrcode_detector \
-            industrial_vision_bringup
-
-      - name: Build Basler C++ packages when pylon is available
-        run: |
-          . /opt/ros/humble/setup.sh
-          if [ -d /opt/pylon/include/pylon ] && [ -d /opt/pylon/lib ]; then
-            colcon build --symlink-install --packages-select \
-              pylon_ros2_camera_component pylon_ros2_camera_wrapper
-          else
-            echo "pylon SDK is unavailable in this runner; C++ camera build is covered by the deployment image build."
-          fi
+          colcon build --symlink-install --packages-up-to industrial_vision_bringup
 
       - name: Validate scripts and Python sources
         run: |
@@ -61,11 +93,9 @@ jobs:
             src/industrial_vision_bringup/test/ \
             -v
 
-      - name: Lint Python packages
+      - name: Lint packages
         run: |
           . /opt/ros/humble/setup.sh
-          colcon test --packages-select \
-            pylon_ros2_camera_interfaces apriltag_pose_reader \
-            keyence_sr_wrapper qrcode_detector industrial_vision_bringup \
+          colcon test --packages-up-to industrial_vision_bringup \
             --event-handlers console_cohesion+
           colcon test-result --verbose
