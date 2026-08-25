@@ -17,12 +17,14 @@ jobs:
       PATH: /opt/pylon/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
     steps:
       - uses: actions/checkout@v4
+        with:
+          lfs: true
 
       - name: Install dependencies and system packages
         run: |
           apt-get update
           apt-get install -y --no-install-recommends \
-            libusb-1.0-0-dev libyaml-cpp-dev libopencv-dev \
+            libusb-1.0-0-dev libudev-dev libyaml-cpp-dev libopencv-dev \
             python3-pytest python3-opencv python3-numpy \
             ros-humble-cv-bridge ros-humble-sensor-msgs ros-humble-std-msgs \
             ros-humble-std-srvs ros-humble-tf2-ros ros-humble-tf2-msgs \
@@ -36,18 +38,47 @@ jobs:
 
       - name: Install Basler Pylon SDK
         run: |
-          SDK_DIR="deploy/basler_camera/pylon-sdk"
-          if [ ! -d "$SDK_DIR" ] && [ -d "ros2_ws/$SDK_DIR" ]; then
-            SDK_DIR="ros2_ws/$SDK_DIR"
-          fi
           mkdir -p /tmp/pylon-installer
-          tar_archive=$(find "$SDK_DIR" -maxdepth 1 -type f -name '*.tar.gz' | sort | head -n 1)
+          # 检查可能的 SDK 目录并安全搜索安装包
+          SDK_DIR=""
+          for candidate in \
+            "deploy/basler_camera/pylon-sdk" \
+            "ros2_ws/deploy/basler_camera/pylon-sdk" \
+            "$GITHUB_WORKSPACE/deploy/basler_camera/pylon-sdk" \
+            "$GITHUB_WORKSPACE/ros2_ws/deploy/basler_camera/pylon-sdk"; do
+            if [ -n "$candidate" ] && [ -d "$candidate" ]; then
+              SDK_DIR="$candidate"
+              break
+            fi
+          done
+
+          tar_archive=""
+          deb_files=""
+          if [ -n "$SDK_DIR" ]; then
+            echo "Searching Pylon installer in $SDK_DIR..."
+            tar_archive=$(find "$SDK_DIR" -maxdepth 1 -type f \( -name 'pylon*.tar.gz' -o -name '*.tar.gz' \) 2>/dev/null | sort | head -n 1)
+            deb_files=$(find "$SDK_DIR" -maxdepth 1 -type f -name '*.deb' 2>/dev/null | sort)
+          fi
+
+          if [ -z "$tar_archive" ] && [ -z "$deb_files" ]; then
+            tar_archive=$(find . -maxdepth 3 -type f \( -name 'pylon*.tar.gz' -o -name '*pylon*linux*.tar.gz' \) 2>/dev/null | sort | head -n 1)
+          fi
+
           if [ -n "$tar_archive" ]; then
             echo "Extracting $tar_archive..."
             tar -xzf "$tar_archive" -C /tmp/pylon-installer
+          elif [ -n "$deb_files" ]; then
+            echo "Copying deb files from $SDK_DIR..."
+            cp $deb_files /tmp/pylon-installer/
+          else
+            echo "::error::未在工作区中找到 Basler Pylon SDK 安装包（.tar.gz 或 .deb）。"
+            echo "请注意：.gitignore 默认忽略了 deploy/basler_camera/pylon-sdk/ 目录，若未提交 SDK 到仓库或未配置下载，CI 会缺少该文件。"
+            exit 1
           fi
+
           if find /tmp/pylon-installer -maxdepth 1 -type f -name '*.deb' | grep -q .; then
             echo "Installing Pylon deb packages..."
+            apt-get update
             apt-get install -y --no-install-recommends /tmp/pylon-installer/*.deb
           else
             setup_tar=$(find "$SDK_DIR" /tmp/pylon-installer -maxdepth 1 -type f -name '*_setup.tar.gz' 2>/dev/null | head -n 1)
@@ -56,7 +87,7 @@ jobs:
               mkdir -p /opt/pylon
               tar -xzf "$setup_tar" -C /opt/pylon
             else
-              echo "ERROR: No valid Pylon SDK installer found in $SDK_DIR" >&2
+              echo "::error::No valid Pylon SDK installer found in /tmp/pylon-installer" >&2
               exit 1
             fi
           fi
@@ -64,10 +95,15 @@ jobs:
 
       - name: Configure environment variables
         run: |
-          echo "PYLON_ROOT=/opt/pylon" >> $GITHUB_ENV
-          echo "GENICAM_GENTL64_PATH=/opt/pylon/lib/gentlproducer/gtl" >> $GITHUB_ENV
-          echo "/opt/pylon/bin" >> $GITHUB_PATH
-          echo "LD_LIBRARY_PATH=/opt/pylon/lib:${LD_LIBRARY_PATH:-}" >> $GITHUB_ENV
+          PYLON_DIR=$(find /opt -maxdepth 1 -type d -name 'pylon*' | sort -V | tail -n 1)
+          if [ -z "$PYLON_DIR" ] || [ ! -d "$PYLON_DIR" ]; then
+            PYLON_DIR="/opt/pylon"
+          fi
+          echo "Using Pylon SDK at: $PYLON_DIR"
+          echo "PYLON_ROOT=$PYLON_DIR" >> "$GITHUB_ENV"
+          echo "GENICAM_GENTL64_PATH=$PYLON_DIR/lib/gentlproducer/gtl" >> "$GITHUB_ENV"
+          echo "LD_LIBRARY_PATH=$PYLON_DIR/lib:${LD_LIBRARY_PATH:-}" >> "$GITHUB_ENV"
+          echo "$PYLON_DIR/bin" >> "$GITHUB_PATH"
 
       - name: Build workspace
         run: |
