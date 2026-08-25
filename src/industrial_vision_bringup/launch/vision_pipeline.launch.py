@@ -108,6 +108,11 @@ def launch_pipeline(context):
     use_compressed = parse_bool(
         context.launch_configurations['use_compressed'], 'use_compressed'
     )
+    handeye_calibration_file = context.launch_configurations.get(
+        'handeye_calibration_file', ''
+    )
+    world_frame = context.launch_configurations.get('world_frame', '')
+    base_frame = context.launch_configurations.get('base_frame', '')
     min_detect_interval_s = float(
         context.launch_configurations['min_detect_interval_s']
     )
@@ -157,64 +162,92 @@ def launch_pipeline(context):
     nodes = []
 
     # ------------------------------------------------------------------
-    # Camera always runs in a component container (zero-copy image pub)
+    # High-performance zero-copy component container:
+    # Hosts Pylon Camera driver, AprilTag detector, and WeChatQR detector
+    # in a single multi-threaded process with intra-process communication.
     # ------------------------------------------------------------------
+    composable_nodes = [
+        ComposableNode(
+            package='pylon_ros2_camera_component',
+            plugin='pylon_ros2_camera::PylonROS2CameraNode',
+            name='pylon_ros2_camera_node',
+            namespace=camera_id,
+            parameters=[
+                camera_config,
+                {
+                    'startup_user_set': startup_user_set,
+                    'camera_frame': camera_frame,
+                    'mtu_size': int(mtu_size),
+                    'binning_x': 2,
+                    'binning_y': 2,
+                    'enable_status_publisher': True,
+                    'enable_current_params_publisher': True,
+                },
+            ],
+            extra_arguments=[{'use_intra_process_comms': True}],
+            remappings=[('/diagnostics', diagnostics_topic)],
+        ),
+    ]
+
+    if enable_apriltag:
+        composable_nodes.append(ComposableNode(
+            package='apriltag_ros',
+            plugin='AprilTagNode',
+            name='apriltag',
+            namespace=camera_id,
+            parameters=[detector_config, {
+                'tag': {
+                    'ids': tag_ids,
+                    'frames': tag_frames,
+                    'sizes': [0.05] * len(tag_ids),
+                },
+            }],
+            remappings=[
+                ('image_rect', image_topic),
+                ('camera_info', camera_info_topic),
+                ('/diagnostics', diagnostics_topic),
+            ],
+            extra_arguments=[{'use_intra_process_comms': True}],
+        ))
+
+    if enable_qrcode:
+        composable_nodes.append(ComposableNode(
+            package='qrcode_detector',
+            plugin='qrcode_detector::QRCodeNode',
+            name='wechat_qr_node',
+            namespace=camera_id,
+            parameters=[{
+                'image_topic': image_topic,
+                'camera_info_topic': camera_info_topic,
+                'prefer_wechat_qr': prefer_wechat_qr,
+                'use_camera_info': True,
+                'deduplicate_window_s': 0.5,
+                'min_detect_interval_s': min_detect_interval_s,
+                'use_compressed': use_compressed,
+                'queue_size': 1,
+            }],
+            remappings=[
+                ('~/decoded_info', qr_decoded_topic),
+                ('/diagnostics', diagnostics_topic),
+            ],
+            extra_arguments=[{'use_intra_process_comms': True}],
+        ))
+
     container = ComposableNodeContainer(
         name=f'vision_container_{camera_id}',
         namespace='',
         package='rclcpp_components',
         executable='component_container_mt',
-        composable_node_descriptions=[
-            ComposableNode(
-                package='pylon_ros2_camera_component',
-                plugin='pylon_ros2_camera::PylonROS2CameraNode',
-                name='pylon_ros2_camera_node',
-                namespace=camera_id,
-                parameters=[
-                    camera_config,
-                    {
-                        'startup_user_set': startup_user_set,
-                        'camera_frame': camera_frame,
-                        'mtu_size': int(mtu_size),
-                        'binning_x': 2,
-                        'binning_y': 2,
-                        'enable_status_publisher': True,
-                        'enable_current_params_publisher': True,
-                    },
-                ],
-                extra_arguments=[{'use_intra_process_comms': True}],
-                remappings=[('/diagnostics', diagnostics_topic)],
-            ),
-        ],
+        composable_node_descriptions=composable_nodes,
+        output='screen',
+        respawn=respawn,
+        respawn_delay=3.0,
     )
     nodes.append(container)
 
     # ------------------------------------------------------------------
-    # AprilTag chain (conditional)
+    # AprilTag pose reader (conditional)
     # ------------------------------------------------------------------
-    nodes.append(Node(
-        package='apriltag_ros',
-        executable='apriltag_node',
-        name='apriltag',
-        namespace=camera_id,
-        output='screen',
-        respawn=respawn,
-        respawn_delay=3.0,
-        condition=IfCondition(str(enable_apriltag).lower()),
-        remappings=[
-            ('image_rect', image_topic),
-            ('camera_info', camera_info_topic),
-            ('/diagnostics', diagnostics_topic),
-        ],
-        parameters=[detector_config, {
-            'tag': {
-                'ids': tag_ids,
-                'frames': tag_frames,
-                'sizes': [0.05] * len(tag_ids),
-            },
-        }],
-    ))
-
     nodes.append(Node(
         package='apriltag_pose_reader',
         executable='apriltag_pose_reader',
@@ -237,34 +270,6 @@ def launch_pipeline(context):
             'publish_detection_logs': False,
         }],
         remappings=[('/diagnostics', diagnostics_topic)],
-    ))
-
-    # ------------------------------------------------------------------
-    # QR detection chain (conditional) — subscribes to raw image directly
-    # ------------------------------------------------------------------
-    nodes.append(Node(
-        package='qrcode_detector',
-        executable='qrcode_node',
-        name='wechat_qr_node',
-        namespace=camera_id,
-        output='screen',
-        respawn=respawn,
-        respawn_delay=3.0,
-        condition=IfCondition(str(enable_qrcode).lower()),
-        parameters=[{
-            'image_topic': image_topic,
-            'camera_info_topic': camera_info_topic,
-            'prefer_wechat_qr': prefer_wechat_qr,
-            'use_camera_info': True,
-            'deduplicate_window_s': 0.5,
-            'min_detect_interval_s': min_detect_interval_s,
-            'use_compressed': use_compressed,
-            'queue_size': 1,
-        }],
-        remappings=[
-            ('~/decoded_info', qr_decoded_topic),
-            ('/diagnostics', diagnostics_topic),
-        ],
     ))
 
     # ------------------------------------------------------------------
@@ -305,6 +310,38 @@ def launch_pipeline(context):
             'expected_components': expected_components,
         }],
     ))
+
+    # ------------------------------------------------------------------
+    # Optional Hand-Eye static TF broadcaster
+    # ------------------------------------------------------------------
+    if handeye_calibration_file:
+        nodes.append(Node(
+            package='apriltag_pose_reader',
+            executable='handeye_static_tf_broadcaster',
+            name='handeye_static_tf_broadcaster',
+            namespace=camera_id,
+            output='screen',
+            parameters=[{
+                'calibration_file': handeye_calibration_file,
+                'child_frame': camera_frame,
+            }],
+        ))
+
+    # Optional world -> base_link static anchor
+    if world_frame and base_frame:
+        nodes.append(Node(
+            package='apriltag_pose_reader',
+            executable='handeye_static_tf_broadcaster',
+            name='world_base_static_tf_broadcaster',
+            namespace=camera_id,
+            output='screen',
+            parameters=[{
+                'parent_frame': world_frame,
+                'child_frame': base_frame,
+                'translation': [0.0, 0.0, 0.0],
+                'rotation_rpy': [0.0, 0.0, 0.0],
+            }],
+        ))
 
     return nodes
 
@@ -355,6 +392,21 @@ def generate_launch_description():
         DeclareLaunchArgument(
             'use_compressed',
             default_value=os.environ.get('USE_COMPRESSED', 'false'),
+        ),
+        DeclareLaunchArgument(
+            'handeye_calibration_file',
+            default_value=os.environ.get('HANDEYE_CALIBRATION_FILE', ''),
+            description='Path to hand-eye calibration YAML for static TF broadcasting',
+        ),
+        DeclareLaunchArgument(
+            'world_frame',
+            default_value=os.environ.get('WORLD_FRAME', ''),
+            description='Global world frame ID for multi-camera anchor',
+        ),
+        DeclareLaunchArgument(
+            'base_frame',
+            default_value=os.environ.get('BASE_FRAME', ''),
+            description='Robot base link frame ID',
         ),
         OpaqueFunction(function=launch_pipeline),
     ])

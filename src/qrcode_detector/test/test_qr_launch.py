@@ -25,3 +25,13 @@ def test_parse_bool_rejects_ambiguous_values(value):
 def test_parse_nonnegative_float_rejects_invalid_values(value):
     with pytest.raises(RuntimeError, match='interval'):
         MODULE.parse_nonnegative_float(value, 'interval')
+
+
+@pytest.mark.parametrize('value', ['0', 'nan', '-1', 'bad'])
+def test_parse_positive_float_rejects_invalid_values(value):
+    with pytest.raises(RuntimeError, match='qr_size_m'):
+        MODULE.parse_positive_float(value, 'qr_size_m')
+
+
+def test_parse_positive_float_accepts_positive_value():
+    assert MODULE.parse_positive_float('0.025', 'qr_size_m') == 0.025

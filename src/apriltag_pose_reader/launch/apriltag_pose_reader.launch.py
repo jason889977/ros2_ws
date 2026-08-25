@@ -1,6 +1,7 @@
 """Launch official apriltag_ros and the local AprilTag pose reader."""
 
 import os
+import math
 
 from ament_index_python.packages import get_package_share_directory
 from launch import LaunchDescription
@@ -10,19 +11,45 @@ from launch.substitutions import LaunchConfiguration
 from launch_ros.actions import Node
 
 
+def parse_bool(value, name):
+    normalized = str(value).strip().lower()
+    if normalized not in ('true', 'false'):
+        raise RuntimeError(f'Invalid {name}={value!r}; expected true or false.')
+    return normalized == 'true'
+
+
+def parse_int(value, name):
+    try:
+        return int(value)
+    except (TypeError, ValueError) as error:
+        raise RuntimeError(f'Invalid {name}={value!r}; expected an integer.') from error
+
+
+def parse_nonnegative_float(value, name):
+    try:
+        parsed = float(value)
+    except (TypeError, ValueError) as error:
+        raise RuntimeError(f'Invalid {name}={value!r}; expected a finite value >= 0.') from error
+    if not math.isfinite(parsed) or parsed < 0.0:
+        raise RuntimeError(f'Invalid {name}={value!r}; expected a finite value >= 0.')
+    return parsed
+
+
 def _launch(context):
     image_topic = LaunchConfiguration('image_topic').perform(context)
     camera_info_topic = LaunchConfiguration('camera_info_topic').perform(context)
     detector_params_file = LaunchConfiguration('detector_params_file').perform(context)
-    start_detector = LaunchConfiguration('start_detector').perform(context).lower() == 'true'
+    start_detector = parse_bool(LaunchConfiguration('start_detector').perform(context), 'start_detector')
     tag_frame_id = LaunchConfiguration('tag_frame_id').perform(context)
     tag_family = LaunchConfiguration('tag_family').perform(context)
-    tag_id = LaunchConfiguration('tag_id').perform(context)
+    tag_id = parse_int(LaunchConfiguration('tag_id').perform(context), 'tag_id')
     lookup_parent_frame = LaunchConfiguration('lookup_parent_frame').perform(context)
-    lookup_rate_hz = LaunchConfiguration('lookup_rate_hz').perform(context)
-    health_log_interval_s = LaunchConfiguration('health_log_interval_s').perform(context)
-    publish_all_tags = LaunchConfiguration('publish_all_tags').perform(context)
-    tag_timeout_s = LaunchConfiguration('tag_timeout_s').perform(context)
+    lookup_rate_hz = parse_nonnegative_float(LaunchConfiguration('lookup_rate_hz').perform(context), 'lookup_rate_hz')
+    health_log_interval_s = parse_nonnegative_float(
+        LaunchConfiguration('health_log_interval_s').perform(context), 'health_log_interval_s'
+    )
+    publish_all_tags = parse_bool(LaunchConfiguration('publish_all_tags').perform(context), 'publish_all_tags')
+    tag_timeout_s = parse_nonnegative_float(LaunchConfiguration('tag_timeout_s').perform(context), 'tag_timeout_s')
 
     actions = []
 
@@ -52,12 +79,12 @@ def _launch(context):
                 'tf_topic': '/tf',
                 'tag_frame_id': tag_frame_id,
                 'tag_family': tag_family,
-                'tag_id': int(tag_id),
+                'tag_id': tag_id,
                 'lookup_parent_frame': lookup_parent_frame,
-                'lookup_rate_hz': float(lookup_rate_hz),
-                'health_log_interval_s': float(health_log_interval_s),
-                'publish_all_tags': publish_all_tags.lower() == 'true',
-                'tag_timeout_s': float(tag_timeout_s),
+                'lookup_rate_hz': lookup_rate_hz,
+                'health_log_interval_s': health_log_interval_s,
+                'publish_all_tags': publish_all_tags,
+                'tag_timeout_s': tag_timeout_s,
                 'output_pose_topic': '/apriltag/pose',
                 'output_transform_topic': '/apriltag/transform',
                 'subscribe_detections': True,

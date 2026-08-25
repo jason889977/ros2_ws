@@ -161,9 +161,17 @@ if [[ "${*}" == *"vision_pipeline.launch.py"* ]]; then
     echo "[entrypoint] Launching single-camera pipeline: $CAM1_ID"
     ros2 launch industrial_vision_bringup vision_pipeline.launch.py "${CAM1_ARGS[@]}" &
     PID1=$!
-    if ! wait_for_camera_ready "$CAM1_ID" "$PID1" "$STARTUP_TIMEOUT_S"; then
+    _cleanup_single() {
       kill "$PID1" 2>/dev/null || true
+      for i in $(seq 1 10); do
+        kill -0 "$PID1" 2>/dev/null || break
+        sleep 1
+      done
+      kill -9 "$PID1" 2>/dev/null || true
       wait "$PID1" 2>/dev/null || true
+    }
+    trap _cleanup_single EXIT INT TERM
+    if ! wait_for_camera_ready "$CAM1_ID" "$PID1" "$STARTUP_TIMEOUT_S"; then
       exit 70
     fi
     wait "$PID1"

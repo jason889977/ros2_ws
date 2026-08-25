@@ -1373,6 +1373,7 @@ std::string PylonROS2GigECamera::setUserSetDefaultSelector(const int& set)
     catch ( const GenICam::GenericException &e ) 
     {
         RCLCPP_ERROR_STREAM(LOGGER_GIGE, "An exception while selecting the user default set occurred:" << e.GetDescription());
+        grabbingStarting();
         return e.GetDescription();
     }
     return "done";

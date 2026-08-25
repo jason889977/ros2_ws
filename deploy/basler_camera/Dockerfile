@@ -46,22 +46,9 @@ RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
     ros-humble-pcl-ros \
     ros-humble-rclcpp-components ros-humble-sensor-msgs
 
-# The production QR pipeline uses OpenCV's WeChatQR backend. Keep the Python
-# OpenCV version explicit instead of silently relying on the distro package.
-#
-# WARNING (issue #9): this image intentionally mixes two OpenCV builds:
-#   - apt  libopencv-dev / python3-opencv  (system OpenCV 4.5.4, used by cv_bridge)
-#   - pip  opencv-contrib-python-headless  (4.8.1, used by the QR WeChatQR node)
-# This currently works only because the pip package is 'headless' and statically
-# links its own OpenCV, and because '--no-deps' keeps pip from upgrading numpy in
-# a way that would break the apt python3-opencv. Do NOT:
-#   - switch the pip package to a non-headless build, or
-#   - bump opencv-contrib-python-headless/numpy without rebuilding cv_bridge,
-# or the qrcode_node process will segfault on the cv_bridge<->cv2 boundary.
-# The clean long-term fix is to build cv_bridge against the pip OpenCV.
-RUN python3 -m pip install --no-cache-dir --no-deps \
-    numpy==1.26.4 \
-    opencv-contrib-python-headless==4.8.1.78
+# OpenCV and QR detection:
+# The C++ WeChatQR detector component links directly against system OpenCV (libopencv-dev / libopencv_wechat_qrcode),
+# eliminating pip OpenCV dual-runtime conflicts and enabling intra-process zero-copy communication.
 
 # Place the licensed Basler pylon runtime/SDK under deploy/basler_camera/pylon-sdk.
 # The SDK is intentionally not committed to this repository.

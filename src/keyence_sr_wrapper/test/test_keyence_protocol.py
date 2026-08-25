@@ -98,6 +98,18 @@ class TestKeyenceProtocol(unittest.TestCase):
         self.assertEqual(result.message, 'ABC123')
         node.destroy_node()
 
+    def test_trigger_parses_utf8_response(self):
+        node = self._make_node()
+        mock_sock = MagicMock()
+        mock_sock.recv.return_value = '物料批次-20260825\r'.encode('utf-8')
+        node.client_socket = mock_sock
+        from std_srvs.srv import Trigger
+        response = Trigger.Response()
+        result = node.trigger_scan_callback(Trigger.Request(), response)
+        self.assertTrue(result.success)
+        self.assertEqual(result.message, '物料批次-20260825')
+        node.destroy_node()
+
     def test_trigger_reassembles_fragmented_response(self):
         node = self._make_node()
         mock_sock = MagicMock()

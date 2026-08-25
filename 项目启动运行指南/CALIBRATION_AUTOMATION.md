@@ -150,9 +150,16 @@ python3 scripts/handeye_calibrate.py \
   --target-frame apriltag_board
 ```
 
-## 4. 结果与验证
+## 4. 结果与生产应用闭环
 
-核心结果是固定安装变换：
+### 4.1 标定结果输出
+
+求解器会输出 OpenCV YAML 格式的标定结果（如 `handeye_dataset/handeye.yaml`），其中包含：
+- `gripper_to_camera_matrix`（${}^{tool0}T_{camera}$，4x4 齐次变换矩阵）
+- `gripper_frame`（默认 `tool0`）与 `camera_frame`（默认 `camera_optical_frame`）
+- 闭环验证平均平移与旋转误差
+
+核心数学关系为：
 
 $$
 {}^{gripper}T_{camera}
@@ -161,10 +168,57 @@ $$
 运行时组合为：
 
 $$
-{}^{base}T_{camera} = {}^{base}T_{gripper} \\cdot {}^{gripper}T_{camera}
+{}^{base}T_{camera} = {}^{base}T_{gripper} \cdot {}^{gripper}T_{camera}
 $$
 
 不要把手眼输出直接当作静态 `base_link -> camera`。使用未参与标定的新姿态低速验证，并至少重复 3 次。发现轴方向错误、单位错误或米级误差时立即停止机器人。
+
+### 4.2 标定结果接入生产运行（静态 TF 自动广播）
+
+完成手眼标定后，无需手动计算矩阵或修改下游代码，可通过以下方式一键广播静态 TF：
+
+#### 方式 1：集成到 vision_pipeline 流水线（推荐，生产模式）
+启动流水线时直接传入标定文件路径与世界坐标系参数：
+
+```bash
+ros2 launch industrial_vision_bringup vision_pipeline.launch.py \
+  handeye_calibration_file:=/home/ubuntu/ros2_ws/handeye_dataset/handeye.yaml \
+  world_frame:=world \
+  base_frame:=base_link
+```
+
+若使用 Docker 部署，在 `deploy/basler_camera/.env` 中配置：
+```dotenv
+HANDEYE_CALIBRATION_FILE=/opt/ros2_ws/deploy/basler_camera/config/handeye.yaml
+WORLD_FRAME=world
+BASE_FRAME=base_link
+```
+
+#### 方式 2：单独启动手眼静态广播节点
+```bash
+ros2 run apriltag_pose_reader handeye_static_tf_broadcaster \
+  --ros-args -p calibration_file:=handeye_dataset/handeye.yaml
+```
+
+### 4.3 TF 树闭环与精度验证
+
+1. **检查 TF 树连通性**：
+```bash
+ros2 run tf2_tools view_frames
+# 会在当前目录生成 frames.pdf，确认链路为: world -> base_link -> ... -> tool0 -> camera_optical_frame
+```
+
+2. **实时查询相机在机械臂基座下的位姿**：
+```bash
+ros2 run tf2_ros tf2_echo base_link camera_optical_frame
+```
+
+3. **验证目标抓取点闭环**：
+将 AprilTag 或二维码放置在视野内，查询目标物料在机械臂基座坐标系下的坐标：
+```bash
+ros2 run tf2_ros tf2_echo base_link tag36h11:3
+```
+手动移动机械臂各轴关节，观察 `base_link -> tag36h11:3` 的输出是否保持静止（静态物料在基座坐标系下的坐标不应随机械臂移动而变化，若保持不动则说明手眼标定与 TF 链路完全正确闭环）。
 
 ## 5. 方式选择与故障排查
 

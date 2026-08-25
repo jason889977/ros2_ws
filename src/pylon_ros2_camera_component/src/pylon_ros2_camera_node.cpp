@@ -4781,7 +4781,10 @@ void PylonROS2CameraNode::executeGrabRawImagesAction(const std::shared_ptr<GrabI
     return;
   }
   auto result = this->grabRawImages(goal_handle);
-  goal_handle->succeed(result);
+  if (!goal_handle->is_canceling())
+  {
+    goal_handle->succeed(result);
+  }
 }
 
 rclcpp_action::GoalResponse PylonROS2CameraNode::handleGrabRectImagesActionGoal([[maybe_unused]] const rclcpp_action::GoalUUID & uuid, [[maybe_unused]] std::shared_ptr<const GrabImagesAction::Goal> goal)
@@ -4836,6 +4839,10 @@ void PylonROS2CameraNode::executeGrabRectImagesAction(const std::shared_ptr<Grab
   else
   {
     result = this->grabRawImages(goal_handle);
+    if (goal_handle->is_canceling())
+    {
+      return;
+    }
     if (!result->success)
     {
       goal_handle->succeed(result);
@@ -4943,10 +4950,26 @@ void PylonROS2CameraNode::executeGrabBlazeDataAction(const std::shared_ptr<GrabB
 
   std::lock_guard<std::recursive_mutex> lock(this->grab_mutex_);
 
-  float previous_exp;
+  struct BlazeSettingsRestoreGuard
+  {
+    PylonROS2CameraNode* self;
+    bool exposure_given;
+    float previous_exp{0.0f};
+
+    ~BlazeSettingsRestoreGuard()
+    {
+      if (!self->pylon_camera_ || !exposure_given)
+      {
+        return;
+      }
+      float reached_val;
+      self->setExposure(previous_exp, reached_val);
+    }
+  } restore_guard{this, goal->exposure_given};
+
   if (goal->exposure_given)
   {
-    previous_exp = this->pylon_camera_->currentExposure();
+    restore_guard.previous_exp = this->pylon_camera_->currentExposure();
   }
 
   RCLCPP_DEBUG_STREAM(LOGGER, "Number of grabbed data set: " << n_data);
@@ -5014,13 +5037,10 @@ void PylonROS2CameraNode::executeGrabBlazeDataAction(const std::shared_ptr<GrabB
     result->cam_info = this->camera_info_manager_->getCameraInfo();
   }
 
-  float reached_val;
-  if (goal->exposure_given)
+  if (!goal_handle->is_canceling())
   {
-    this->setExposure(previous_exp, reached_val);
+    goal_handle->succeed(result);
   }
-
-  goal_handle->succeed(result);
 }
 
 void PylonROS2CameraNode::createDiagnostics(diagnostic_updater::DiagnosticStatusWrapper &stat)

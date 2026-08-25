@@ -3071,6 +3071,7 @@ std::string PylonROS2CameraImpl<CameraTraitT>::saveUserSet()
     catch ( const GenICam::GenericException &e )
     {
         RCLCPP_ERROR_STREAM(LOGGER_BASE, "An exception while saving the user set occurred:" << e.GetDescription());
+        grabbingStarting();
         return e.GetDescription();
     }
     return "done";
@@ -3088,6 +3089,7 @@ std::string PylonROS2CameraImpl<CameraTraitT>::loadUserSet()
     catch ( const GenICam::GenericException &e )
     {
         RCLCPP_ERROR_STREAM(LOGGER_BASE, "An exception while loading the user set occurred:" << e.GetDescription());
+        grabbingStarting();
         return e.GetDescription();
     }
     return "done";
@@ -3108,6 +3110,7 @@ std::pair<std::string, std::string> PylonROS2CameraImpl<CameraTraitT>::getPfs()
     catch ( const GenICam::GenericException &e )
     {
         RCLCPP_ERROR_STREAM(LOGGER_BASE, "An exception while getting camera configuration as pfs:" << e.GetDescription());
+        grabbingStarting();
         stringResults.first = e.GetDescription();
         return stringResults;
     }
@@ -3129,6 +3132,7 @@ std::string PylonROS2CameraImpl<CameraTraitT>::savePfs(const std::string& fileNa
     catch ( const GenICam::GenericException &e )
     {
         RCLCPP_ERROR_STREAM(LOGGER_BASE, "An exception while saving the pfs file:" << e.GetDescription());
+        grabbingStarting();
         return e.GetDescription();
     }
     return "done";
@@ -3148,6 +3152,7 @@ std::string PylonROS2CameraImpl<CameraTraitT>::loadPfs(const std::string& fileNa
     catch ( const GenICam::GenericException &e )
     {
         RCLCPP_ERROR_STREAM(LOGGER_BASE, "An exception while loading the pfs file:" << e.GetDescription());
+        grabbingStarting();
         return e.GetDescription();
     }
     return "done";
@@ -3216,6 +3221,7 @@ std::string PylonROS2CameraImpl<CameraTraitT>::setUserSetDefaultSelector(const i
     catch ( const GenICam::GenericException &e )
     {
         RCLCPP_ERROR_STREAM(LOGGER_BASE, "An exception while changing user set default selector occurred:" << e.GetDescription());
+        grabbingStarting();
         return e.GetDescription();
     }
     return "done";

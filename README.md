@@ -7,7 +7,7 @@
 - **统一容器部署**：单 Docker 容器运行全部检测链路，一键启动
 - **模块化检测链**：AprilTag / QR / Keyence 可独立启用/禁用（`enable_apriltag` / `enable_qrcode` / `enable_keyence`）
 - **多相机支持**：同一容器内运行两条独立 pipeline，每台相机可配不同检测链路，输出话题按 `camera_id` 命名空间隔离
-- **相机组件化运行**：Basler 相机 C++ 节点运行在 `ComposableNodeContainer` 中并启用 intra-process 通信；AprilTag、二维码和 Keyence 节点作为独立进程运行
+- **相机与算法全链路组件化**：Basler 相机、AprilTag 检测与 WeChatQR 二维码节点均作为 C++ Component 运行在 `vision_container`（`component_container_mt`）中并启用 intra-process 零拷贝通信；Keyence 扫码与位姿处理作为独立进程运行
 - **BEST_EFFORT QoS**：图像发布/订阅均使用 `BEST_EFFORT + depth=1`，丢弃旧帧而非阻塞采集循环
 - **GenICam 读取节流**：`publishCurrentParams` 从每帧 30+ 次网络读取降至 1Hz；chunk mode 寄存器每帧 2 次读取改为 init 缓存
 - **12-bit 零分配**：bit-shift 转换缓冲区复用为成员变量，消除每帧 ~10MB 堆分配
@@ -41,50 +41,62 @@ scripts/                            # 部署、标定、RViz 脚本
 ## 系统架构
 
 ```mermaid
-graph TB
-    subgraph Docker Container ["Docker Container (basler_camera)"]
-        subgraph ComponentContainer ["vision_container (C++ 零拷贝, BEST_EFFORT QoS)"]
-            CAM["pylon_ros2_camera_node<br/>(Basler GigE 驱动)"]
+graph TD
+    subgraph Hardware["1. 硬件与感知层 (Hardware Layer)"]
+        GigECam["Basler GigE 工业相机<br>(acA2500-14gm / GigE Vision)"]
+        KeyenceScanner["Keyence SR-1000 扫码器<br>(TCP/IP :9004)"]
+        xArm7["xArm7 机械臂系统<br>(xarm_ros2)"]
+    end
+
+    subgraph DockerContainer["2. Docker 生产容器: basler_camera (network: host)"]
+        subgraph ZeroCopyContainer["vision_container (进程: component_container_mt)"]
+            PylonNode["pylon_ros2_camera_node<br>(PylonROS2CameraNode Component)<br>• Pylon SDK 图像采集<br>• 曝光/增益/ROI参数控制<br>• Chunk 硬件时间戳"]
+            AprilTagNode["apriltag<br>(AprilTagNode Component)<br>• 36h11 标签检测<br>• 角点提取与几何校验"]
+            QRNode["wechat_qr_node<br>(qrcode_detector::QRCodeNode C++ Component)<br>• WeChatQR Caffe 深度学习推理<br>• 去重抑制与帧率门控<br>• solvePnP 6D 位姿解算"]
         end
 
-        subgraph DetectionChain ["检测链路 (按 enable_* 开关)"]
-            ATR["apriltag_pose_reader<br/>(位姿解算)"]
-            QR["wechat_qr_node<br/>(二维码识别, BEST_EFFORT)"]
-            KEY["keyence_sr_node<br/>(Keyence 扫码, SO_KEEPALIVE)"]
-            AT["apriltag_ros<br/>(AprilTag 检测)"]
+        subgraph StandaloneNodes["辅助协同进程 (ROS 2 Python Nodes)"]
+            PoseReader["apriltag_pose_reader<br>• TF Buffer 监听与缓存<br>• 标签坐标系匹配与过滤<br>• 位姿/变换双格式转换"]
+            KeyenceNode["keyence_sr_node<br>• TCP 长连接与自动重连<br>• LON 指令触发与分包粘包解析<br>• UTF-8 多语言字符解码"]
+            StatusAgg["vision_status_aggregator<br>• 汇聚 /diagnostics<br>• 节点存活与超时判定<br>• 综合状态评级 (OK/WARN/ERROR)"]
         end
     end
 
-    CAM -- "/{cam}/image_raw" --> AT
-    CAM -- "/{cam}/image_raw<br/>(BEST_EFFORT, depth=1)" --> QR
-    CAM -- "/{cam}/camera_info" --> AT
-    CAM -- "/{cam}/camera_info" --> QR
-
-    AT -- "/{cam}/detections" --> ATR
-    AT -- "/tf (tag frames)" --> ATR
-
-    CAM ==>|"GigE TCP/IP"| CAMERA["Basler 相机<br/>(acA2500-14GC)"]
-    KEY ==>|"TCP 9004<br/>SO_KEEPALIVE + RLock"| SCANNER["Keyence SR 扫码器"]
-
-    subgraph OutputTopics ["输出话题 (按 camera_id 隔离)"]
-        T1["/{cam}/apriltag/pose"]
-        T2["/{cam}/apriltag/transform"]
-        T3["/{cam}/qr/decoded_info"]
-        T4["/{cam}/scanner/barcode"]
+    subgraph BusinessLayer["3. 业务应用与产线集成层 (Downstream & MES)"]
+        MotionPlanner["机械臂轨迹规划与抓取控制<br>(MoveIt 2 / FollowJointTrajectory)"]
+        MESSystem["工厂 MES / WMS 产线管理系统<br>(物料追踪 / 扫码防错 / 工单闭环)"]
+        MonitorPanel["工控机运维与监控看板<br>(RViz2 / Docker Healthcheck)"]
     end
 
-    ATR --> T1
-    ATR --> T2
-    QR --> T3
-    KEY --> T4
+    %% 硬件接口连接
+    GigECam -->|GigE UDP 数据包| PylonNode
+    KeyenceScanner <-->|TCP Socket 指令与响应| KeyenceNode
+    xArm7 -.->|/xarm/robot_states| MotionPlanner
 
-    subgraph Diagnostics ["诊断 /diagnostics"]
-        D1["Scanner Connection<br/>(Keyence 状态 + 计数)"]
-        D2["AprilTag Status<br/>(检测计数 + 标签帧)"]
-    end
+    %% 进程内零拷贝数据流 (粗实线)
+    PylonNode ==>|【进程内指针零拷贝】<br>/camera_id/image_raw| AprilTagNode
+    PylonNode ==>|【进程内指针零拷贝】<br>/camera_id/image_raw| QRNode
+    PylonNode -.->|/camera_id/camera_info| AprilTagNode
+    PylonNode -.->|/camera_id/camera_info| QRNode
 
-    KEY --> D1
-    ATR --> D2
+    %% 节点间与业务话题流
+    AprilTagNode -->|/detections 与 /tf| PoseReader
+    PoseReader -->|/apriltag/pose<br>geometry_msgs/PoseStamped| MotionPlanner
+    PoseReader -->|/apriltag/transform<br>geometry_msgs/TransformStamped| MotionPlanner
+
+    QRNode -->|/qr/decoded_info<br>std_msgs/String| MESSystem
+    QRNode -->|/qr/pose 6D位姿| MotionPlanner
+
+    KeyenceNode -->|/scanner/barcode<br>std_msgs/String| MESSystem
+    MESSystem -->|/scanner/trigger 服务调用| KeyenceNode
+
+    %% 诊断与健康度汇聚
+    PylonNode -.->|Diagnostics| StatusAgg
+    AprilTagNode -.->|Diagnostics| StatusAgg
+    QRNode -.->|Diagnostics| StatusAgg
+    KeyenceNode -.->|Diagnostics| StatusAgg
+    StatusAgg -->|/vision/status 状态聚合| MonitorPanel
+    StatusAgg -.->|Healthcheck 探针| DockerContainer
 ```
 
 ### 多相机拓扑
@@ -109,7 +121,8 @@ graph LR
 - Ubuntu 22.04 LTS (x86_64)
 - ROS 2 Humble
 - Basler pylon SDK 8.0.0
-- Python 3.10 / NumPy 1.26.4 / opencv-contrib-python-headless 4.8.1.78
+- OpenCV 4.5.4+ (`libopencv-dev`, `libopencv_wechat_qrcode`)
+- Python 3.10 / NumPy 1.26.4
 - Docker + Docker Compose（生产部署）
 
 ## 快速启动
@@ -236,12 +249,12 @@ ros2 topic echo /my_camera/diagnostics --once
 
 | 文档 | 路径 |
 |------|------|
-| 故障排查手册 | `项目启动运行指南/故障排查手册.md` |
-| 工控机集成与运维指南 | `项目启动运行指南/工控机集成与运维指南.md` |
+| 故障排查手册 | [故障排查手册](项目启动运行指南/故障排查手册.md) |
+| 工控机集成与运维指南 | [工控机集成与运维指南](项目启动运行指南/工控机集成与运维指南.md) |
 | 启动与运行 SOP | [快速启动指南](项目启动运行指南/快速启动指南.md) |
-| 测试验收标准 | [部署与开发操作手册：ROS 2 运行验证与验收](部署与开发操作手册.md#9-ros-2-运行验证与验收) |
-| 交接保留运行要点 | [交接保留运行要点](交接保留运行要点.md) |
-| 模块交付摘要 | `deploy/DELIVERY_SUMMARY.md` |
+| 测试验收标准 | [部署与开发操作手册：ROS 2 运行验证与验收](项目启动运行指南/部署与开发操作手册.md#9-ros-2-运行验证与验收) |
+| 交接保留运行要点 | [交接保留运行要点](项目启动运行指南/交接保留运行要点.md) |
+| 模块交付摘要 | [模块交付摘要](deploy/DELIVERY_SUMMARY.md) |
 
 ## GitHub 仓库
 

@@ -1,6 +1,9 @@
 import importlib.util
 from pathlib import Path
 
+from launch import LaunchContext
+from launch.utilities import perform_substitutions
+
 
 MODULE_PATH = Path(__file__).parents[1] / 'launch' / 'vision_pipeline.launch.py'
 SPEC = importlib.util.spec_from_file_location('vision_pipeline_launch', MODULE_PATH)
@@ -29,29 +32,73 @@ class Context:
         }
 
 
+def _eval_comp_name(lc, comp):
+    name_obj = getattr(comp, '_ComposableNode__node_name', None)
+    if isinstance(name_obj, list):
+        return perform_substitutions(lc, name_obj)
+    return str(name_obj)
+
+
+def _eval_comp_namespace(lc, comp):
+    ns_obj = getattr(comp, '_ComposableNode__node_namespace', None)
+    if isinstance(ns_obj, list):
+        return perform_substitutions(lc, ns_obj)
+    return str(ns_obj)
+
+
+def _eval_node_name(lc, action):
+    name_obj = getattr(action, '_Node__node_name', None)
+    if isinstance(name_obj, list):
+        return perform_substitutions(lc, name_obj)
+    return str(name_obj)
+
+
+def _eval_node_namespace(lc, action):
+    ns_obj = getattr(action, '_Node__node_namespace', None)
+    if isinstance(ns_obj, list):
+        return perform_substitutions(lc, ns_obj)
+    return str(ns_obj)
+
+
 def test_two_camera_pipeline_actions_are_isolated():
     first = MODULE.launch_pipeline(Context('cam1'))
     second = MODULE.launch_pipeline(Context('cam2'))
+    lc = LaunchContext()
 
-    assert len(first) == 6
-    assert len(second) == 6
-    assert first[0]._Node__node_name == 'vision_container_cam1'
-    assert second[0]._Node__node_name == 'vision_container_cam2'
+    assert len(first) == 4
+    assert len(second) == 4
+    assert _eval_node_name(lc, first[0]) == 'vision_container_cam1'
+    assert _eval_node_name(lc, second[0]) == 'vision_container_cam2'
 
-    for actions, camera_id in ((first, 'cam1'), (second, 'cam2')):
-        node_names = {action._Node__node_name for action in actions[1:]}
-        assert node_names == {
+    # Check composable nodes inside container
+    for container_action, camera_id in ((first[0], 'cam1'), (second[0], 'cam2')):
+        comp_descriptions = getattr(
+            container_action,
+            '_ComposableNodeContainer__composable_node_descriptions',
+            [],
+        )
+        comp_names = {_eval_comp_name(lc, comp) for comp in comp_descriptions}
+        assert comp_names == {
+            'pylon_ros2_camera_node',
             'apriltag',
-            'apriltag_pose_reader',
             'wechat_qr_node',
+        }
+        for comp in comp_descriptions:
+            assert _eval_comp_namespace(lc, comp) == camera_id
+
+    # Check standalone nodes
+    for actions, camera_id in ((first, 'cam1'), (second, 'cam2')):
+        node_names = {_eval_node_name(lc, action) for action in actions[1:]}
+        assert node_names == {
+            'apriltag_pose_reader',
             'keyence_sr_node',
             'vision_status_aggregator',
         }
         status_node = next(
             action for action in actions
-            if action._Node__node_name == 'vision_status_aggregator'
+            if _eval_node_name(lc, action) == 'vision_status_aggregator'
         )
-        assert status_node._Node__node_namespace == camera_id
+        assert _eval_node_namespace(lc, status_node) == camera_id
 
     first_frames = MODULE.build_tag_frames('cam1')
     second_frames = MODULE.build_tag_frames('cam2')
@@ -69,13 +116,22 @@ def test_disabled_modules_remain_declared_but_are_conditioned_off():
     })
 
     actions = MODULE.launch_pipeline(context)
+    container = actions[0]
+    lc = LaunchContext()
+    comp_descriptions = getattr(
+        container,
+        '_ComposableNodeContainer__composable_node_descriptions',
+        [],
+    )
+    comp_names = {_eval_comp_name(lc, comp) for comp in comp_descriptions}
+    assert comp_names == {'pylon_ros2_camera_node'}
+
     by_name = {
-        action._Node__node_name: action
+        _eval_node_name(lc, action): action
         for action in actions[1:]
     }
 
-    assert by_name['apriltag']._Action__condition is not None
-    assert by_name['wechat_qr_node']._Action__condition is not None
+    assert by_name['apriltag_pose_reader']._Action__condition is not None
     assert by_name['keyence_sr_node']._Action__condition is not None
     assert by_name['vision_status_aggregator']._Action__condition is None
 
@@ -105,13 +161,14 @@ def test_keyence_only_pipeline_keeps_camera_namespace():
     })
 
     actions = MODULE.launch_pipeline(context)
+    lc = LaunchContext()
     by_name = {
-        action._Node__node_name: action
+        _eval_node_name(lc, action): action
         for action in actions[1:]
     }
 
-    assert by_name['keyence_sr_node']._Node__node_namespace == 'scanner_cam'
-    assert by_name['vision_status_aggregator']._Node__node_namespace == 'scanner_cam'
+    assert _eval_node_namespace(lc, by_name['keyence_sr_node']) == 'scanner_cam'
+    assert _eval_node_namespace(lc, by_name['vision_status_aggregator']) == 'scanner_cam'
 
 
 def test_qr_backend_preference_is_configurable():
@@ -119,15 +176,29 @@ def test_qr_backend_preference_is_configurable():
     context.launch_configurations['prefer_wechat_qr'] = 'false'
 
     actions = MODULE.launch_pipeline(context)
-    qr_node = next(
-        action for action in actions if action._Node__node_name == 'wechat_qr_node'
+    container = actions[0]
+    lc = LaunchContext()
+    comp_descriptions = getattr(
+        container,
+        '_ComposableNodeContainer__composable_node_descriptions',
+        [],
+    )
+    qr_comp = next(
+        comp for comp in comp_descriptions
+        if _eval_comp_name(lc, comp) == 'wechat_qr_node'
     )
 
-    assert any(
-        value is False
-        for parameter_group in qr_node._Node__parameters
-        for value in parameter_group.values()
-    )
+    params = qr_comp._ComposableNode__parameters
+    found_false = False
+    for param in params:
+        if isinstance(param, dict):
+            for k, v in param.items():
+                k_str = perform_substitutions(lc, k) if isinstance(k, (list, tuple)) else str(k)
+                if 'prefer_wechat_qr' in k_str:
+                    v_val = perform_substitutions(lc, v) if isinstance(v, (list, tuple)) else v
+                    if v_val is False or str(v_val).lower() == 'false':
+                        found_false = True
+    assert found_false
 
 
 def test_invalid_pipeline_settings_are_rejected():
@@ -165,13 +236,23 @@ def test_qr_timing_and_compression_settings_are_forwarded():
         'use_compressed': 'true',
     })
     actions = MODULE.launch_pipeline(context)
-    qr_node = next(
-        action for action in actions if action._Node__node_name == 'wechat_qr_node'
+    container = actions[0]
+    lc = LaunchContext()
+    comp_descriptions = getattr(
+        container,
+        '_ComposableNodeContainer__composable_node_descriptions',
+        [],
     )
-    values = [
-        value
-        for group in qr_node._Node__parameters
-        for value in group.values()
-    ]
-    assert 0.5 in values
-    assert True in values
+    qr_node = next(
+        comp for comp in comp_descriptions
+        if _eval_comp_name(lc, comp) == 'wechat_qr_node'
+    )
+    params = qr_node._ComposableNode__parameters
+    all_values = []
+    for param in params:
+        if isinstance(param, dict):
+            for k, v in param.items():
+                v_val = perform_substitutions(lc, v) if isinstance(v, (list, tuple)) else v
+                all_values.append(v_val)
+    assert 0.5 in all_values or '0.5' in all_values
+    assert True in all_values or 'true' in [str(x).lower() for x in all_values]

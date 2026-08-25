@@ -178,7 +178,7 @@ QR、AprilTag、Keyence 均通过统一 `basler_camera` 容器的 pipeline 参�
 | 话题 | 可靠性 | 深度 | 说明 |
 |------|--------|------|------|
 | `image_raw`（发布 + 订阅） | BEST_EFFORT | 1 | 丢弃旧帧，防止反压阻塞采集 |
-| `camera_info` | RELIABLE | 10 | 内参数据量小，保证可达 |
+| `camera_info` | BEST_EFFORT | 1 | 与图像同步发布；下游应使用 sensor-data QoS |
 | 检测结果 / 位姿 | RELIABLE | 10 | 关键数据，保证可达 |
 
 ### 诊断话题 `/{camera_id}/diagnostics`
@@ -216,6 +216,14 @@ QR、AprilTag、Keyence 均通过统一 `basler_camera` 容器的 pipeline 参�
 - 增加超时重连逻辑
 - 补齐 ROS 2 接口说明与 smoke test
 
+### v2.1 极致全链路 C++ Component 零拷贝与稳定性优化（2026-08-25）
+
+**零拷贝与性能：**
+- `qrcode_detector` 使用 C++ 重写为标准 ROS 2 Component（`qrcode_detector::QRCodeNode`），直接链接系统 OpenCV `libopencv_wechat_qrcode`。
+- `pylon_ros2_camera_node`、`apriltag` 与 `wechat_qr_node` 统一编排进 `vision_container_{camera_id}`（`component_container_mt`）并开启 `use_intra_process_comms: true`。
+- 图像数据在容器进程内通过指针零拷贝传递，彻底消除 5MP/12MP 高分辨率图像的 DDS 跨进程序列化与内存深拷贝开销。
+- 彻底移除 Python `opencv-contrib-python-headless` pip 混装依赖（Issue #9），消除运行时符号冲突隐患。
+
 ### v2.0 稳定性与性能优化（2026-08-20）
 
 **可靠性：**
@@ -251,6 +259,13 @@ QR、AprilTag、Keyence 均通过统一 `basler_camera` 容器的 pipeline 参�
 - 新增故障排查手册、架构数据流图
 - 17 个单元测试覆盖核心逻辑
 
-## 9. 交付结论
+## 9. 已知部署边界与后续加固
+
+- 容器使用 host 网络以支持 ROS 2/DDS 多机发现。部署主机应置于受控工业网络，并限制未授权设备接入同一 ROS domain。
+- 容器当前以 root 运行；相机复位、启停采集和 PFS 读写服务对同一 ROS 图中的节点可见。本交付未启用 SROS2 访问控制。
+- 基础镜像使用可变 tag，APT 镜像地址和 pip 依赖未做完整不可变锁定。生产发布应保留已验证镜像的 digest、SBOM 和依赖更新记录。
+- 后续加固应先在隔离工控机验证 SROS2/enclave 策略与非 root 设备权限，再迁移生产环境，避免影响 DDS 发现和相机访问。
+
+## 10. 交付结论
 
 当前交付以 `basler_camera` 统一容器为生产主路径，遵循“只提交镜像 Tag，不提交完整镜像 .tar 文件”的原则。该交付物可用于团队部署、Docker Registry 推送和后续交接复核。

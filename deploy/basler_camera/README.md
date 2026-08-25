@@ -21,9 +21,9 @@ docker compose --env-file deploy/basler_camera/.env \
 `/my_camera/pylon_ros2_camera_node/camera_info`，输出统一位于
 `/my_camera/{apriltag,qr,scanner}/...` 命名空间下。
 
-QR 节点生产配置启用 WeChatQR。镜像构建会固定安装
-`opencv-contrib-python-headless==4.8.1.78`；运行时如果 WeChatQR 模块或模型
-不可用，节点会按 `prefer_wechat_qr` 配置降级为 OpenCV `QRCodeDetector`。
+QR 节点生产配置启用 WeChatQR C++ Component，直接链接系统 OpenCV 原生模块
+（`libopencv_wechat_qrcode.so`），消除 Python pip 双版本混装问题并实现进程内零拷贝传输；
+运行时如果 WeChatQR 模型不可用，节点会自动降级为 OpenCV `QRCodeDetector`。
 
 双相机模式需同时设置 `CAMERA_ID_2` 与 `CAMERA_CONFIG_2`；第二路 ID 和配置文件
 都必须与第一路不同。若第二路启用 AprilTag，还需设置不重复的 `CAMERA_FRAME_2`。

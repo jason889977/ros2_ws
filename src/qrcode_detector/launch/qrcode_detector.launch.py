@@ -17,6 +17,16 @@ def parse_bool(value, name):
     return normalized == 'true'
 
 
+def parse_positive_float(value, name):
+    try:
+        parsed = float(value)
+    except (TypeError, ValueError) as error:
+        raise RuntimeError(f'Invalid {name}={value!r}; expected a finite value > 0.') from error
+    if not math.isfinite(parsed) or parsed <= 0.0:
+        raise RuntimeError(f'Invalid {name}={value!r}; expected a finite value > 0.')
+    return parsed
+
+
 def parse_nonnegative_float(value, name):
     try:
         parsed = float(value)
@@ -54,7 +64,7 @@ def launch_qrcode_node(context):
         'prefer_wechat_qr': parse_bool(prefer_wechat_qr, 'prefer_wechat_qr'),
         'use_camera_info': parse_bool(use_camera_info, 'use_camera_info'),
         'camera_info_topic': camera_info_topic,
-        'qr_size_m': parse_nonnegative_float(qr_size_m, 'qr_size_m'),
+        'qr_size_m': parse_positive_float(qr_size_m, 'qr_size_m'),
         'deduplicate_window_s': parse_nonnegative_float(
             deduplicate_window_s, 'deduplicate_window_s'
         ),

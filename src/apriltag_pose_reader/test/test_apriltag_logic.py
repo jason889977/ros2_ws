@@ -84,6 +84,27 @@ class TestAprilTagFrameFromDetection(unittest.TestCase):
         self.assertEqual(node._frame_from_detection(detection), '')
         node.destroy_node()
 
+    def test_candidate_frame_includes_prefix_for_configured_tag(self):
+        node = self._make_node()
+        node._tag_frame_prefix = 'cam1'
+        node._tag_family = 'tag36h11'
+        node._tag_id = 5
+
+        self.assertEqual(node._candidate_frames(), {'cam1/tag36h11:5'})
+
+        node.destroy_node()
+
+    def test_explicit_tag_frame_takes_precedence_over_prefix(self):
+        node = self._make_node()
+        node._tag_frame_prefix = 'cam1'
+        node._tag_family = 'tag36h11'
+        node._tag_id = 5
+        node._tag_frame_id = 'manual_tag_frame'
+
+        self.assertEqual(node._candidate_frames(), {'manual_tag_frame'})
+
+        node.destroy_node()
+
     def test_candidate_cache_expires_stale_tag(self):
         node = self._make_node()
         node._known_tag_frames = {'tag36h11:5'}

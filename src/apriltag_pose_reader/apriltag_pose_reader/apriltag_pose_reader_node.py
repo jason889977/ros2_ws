@@ -323,7 +323,10 @@ class AprilTagPoseReader(Node):
         if self._tag_frame_id:
             return {self._tag_frame_id}
         if self._tag_family and self._tag_id >= 0:
-            return {f'{self._tag_family}:{self._tag_id}'}
+            frame = f'{self._tag_family}:{self._tag_id}'
+            if self._tag_frame_prefix:
+                frame = f'{self._tag_frame_prefix}/{frame}'
+            return {frame}
         if self._tag_timeout_s > 0.0:
             now = time.monotonic()
             active_frames = {

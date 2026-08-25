@@ -146,7 +146,7 @@ class KeyenceSRNode(Node):
             self._receive_buffer += chunk
 
         raw_response, self._receive_buffer = self._receive_buffer.split(b'\r', 1)
-        return raw_response.decode('ascii').strip()
+        return raw_response.decode('utf-8', errors='replace').strip()
 
     def _on_parameter_changed(self, params: list[Parameter]) -> SetParametersResult:
         """参数变更回调：检测 scanner_ip / scanner_port 变化后自动重连。"""

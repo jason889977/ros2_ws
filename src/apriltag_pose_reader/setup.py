@@ -31,6 +31,7 @@ setup(
             'apriltag_capture = apriltag_pose_reader.aprilgrid_capture:main',
             'apriltag_pipeline = apriltag_pose_reader.aprilgrid_pipeline:main',
             'xarm_handeye_capture = apriltag_pose_reader.xarm_handeye_capture:main',
+            'handeye_static_tf_broadcaster = apriltag_pose_reader.handeye_static_tf_broadcaster:main',
         ],
     },
 )
