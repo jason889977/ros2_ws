@@ -66,7 +66,10 @@ class VisionStatusAggregator(Node):
         status.active_components = len(fresh)
         missing = sorted(self._expected_components - set(fresh))
 
-        if missing:
+        if not self._expected_components:
+            status.overall_level = VisionStatus.OK
+            status.summary = 'No optional components enabled'
+        elif missing:
             status.overall_level = VisionStatus.ERROR
             status.summary = 'Expected components missing diagnostics: ' + ', '.join(missing)
         elif not fresh:

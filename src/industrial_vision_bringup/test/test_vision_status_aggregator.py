@@ -8,11 +8,13 @@ from pylon_ros2_camera_interfaces.msg import VisionStatus
 from industrial_vision_bringup.vision_status_aggregator import VisionStatusAggregator
 
 
-def make_status_node():
+def make_status_node(expected_components=None):
     node = VisionStatusAggregator.__new__(VisionStatusAggregator)
     node._camera_id = 'cam1'
     node._latest = {}
-    node._expected_components = set()
+    if expected_components is None:
+        expected_components = ['Scanner Connection']
+    node._expected_components = set(expected_components)
     node._diagnostic_timeout_s = 5.0
     node._status_pub = MagicMock()
     node.get_clock = lambda: SimpleNamespace(
@@ -21,8 +23,8 @@ def make_status_node():
     return node
 
 
-def test_stale_diagnostics_publish_stale_status():
-    node = make_status_node()
+def test_missing_diagnostics_publish_error_status():
+    node = make_status_node(['Scanner Connection'])
     diagnostic = DiagnosticStatus()
     diagnostic.name = 'Scanner Connection'
     diagnostic.level = DiagnosticStatus.OK
@@ -37,9 +39,17 @@ def test_stale_diagnostics_publish_stale_status():
 
     published = node._status_pub.publish.call_args.args[0]
     assert isinstance(published, VisionStatus)
-    assert published.overall_level == VisionStatus.STALE
+    assert published.overall_level == VisionStatus.ERROR
     assert published.active_components == 0
 
+
+def test_no_expected_components_publish_ok_status():
+    node = make_status_node([])
+    node._publish_status()
+
+    published = node._status_pub.publish.call_args.args[0]
+    assert published.overall_level == VisionStatus.OK
+    assert published.summary == 'No optional components enabled'
 
 def test_latest_error_diagnostic_is_reported():
     node = make_status_node()

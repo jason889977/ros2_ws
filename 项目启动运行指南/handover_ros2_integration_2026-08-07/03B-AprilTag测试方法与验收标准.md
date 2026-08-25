@@ -135,7 +135,7 @@ rviz2
 
 ```bash
 ros2 topic hz /my_camera/pylon_ros2_camera_node/image_raw
-ros2 topic echo /diagnostics
+ros2 topic echo /my_camera/diagnostics
 ```
 
 通过判据:

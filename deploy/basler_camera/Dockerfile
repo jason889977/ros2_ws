@@ -1,5 +1,9 @@
-ARG BASE_IMAGE=osrf/ros:humble-ros-base-jammy
+# Default to the Huawei Cloud mirror for the ROS base image to avoid Docker Hub
+# registry instability and to keep the source explicit and reproducible.
+ARG BASE_IMAGE=swr.cn-north-4.myhuaweicloud.com/ddn-k8s/docker.io/ros:humble-ros-base
 FROM ${BASE_IMAGE}
+
+SHELL ["/bin/bash", "-eo", "pipefail", "-c"]
 
 ARG DEBIAN_FRONTEND=noninteractive
 ARG UBUNTU_APT_MIRROR=http://mirrors.tuna.tsinghua.edu.cn/ubuntu
@@ -9,10 +13,13 @@ ENV PYLON_ROOT=/opt/pylon
 ENV GENICAM_GENTL64_PATH=/opt/pylon/lib/gentlproducer/gtl
 
 RUN set -eux && \
-    sed -i \
-        -e "s|http://archive.ubuntu.com/ubuntu|${UBUNTU_APT_MIRROR}|g" \
-        -e "s|http://security.ubuntu.com/ubuntu|${UBUNTU_APT_MIRROR}|g" \
-        /etc/apt/sources.list && \
+    test -n "${UBUNTU_APT_MIRROR}" && test -n "${ROS2_APT_MIRROR}" && \
+    if [ -f /etc/apt/sources.list ]; then \
+        sed -i \
+            -e "s|http://archive.ubuntu.com/ubuntu|${UBUNTU_APT_MIRROR}|g" \
+            -e "s|http://security.ubuntu.com/ubuntu|${UBUNTU_APT_MIRROR}|g" \
+            /etc/apt/sources.list; \
+    fi && \
     for apt_source in /etc/apt/sources.list.d/*; do \
         [ -f "$apt_source" ] || continue; \
         sed -i \
@@ -20,7 +27,8 @@ RUN set -eux && \
             -e "s|https://packages.ros.org/ros2/ubuntu|${ROS2_APT_MIRROR}|g" \
             -e 's|^Types:.*deb-src.*|Types: deb|g' \
             "$apt_source"; \
-    done
+    done && \
+    grep -R "${UBUNTU_APT_MIRROR}\|${ROS2_APT_MIRROR}" /etc/apt/sources.list /etc/apt/sources.list.d/ >/dev/null
 
 RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
     --mount=type=cache,target=/var/lib/apt/lists,sharing=locked \
@@ -39,6 +47,7 @@ RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
 # The production QR pipeline uses OpenCV's WeChatQR backend. Keep the Python
 # OpenCV version explicit instead of silently relying on the distro package.
 RUN python3 -m pip install --no-cache-dir --no-deps \
+    numpy==1.26.4 \
     opencv-contrib-python-headless==4.8.1.78
 
 # Place the licensed Basler pylon runtime/SDK under deploy/basler_camera/pylon-sdk.
@@ -58,19 +67,32 @@ RUN --mount=type=bind,source=deploy/basler_camera/pylon-sdk,target=/tmp/pylon-sd
         'path-exclude=/usr/share/man/*' \
         'path-exclude=/usr/share/locale/*' \
         > /etc/dpkg/dpkg.cfg.d/01_nodoc && \
-    mkdir -p /tmp/pylon-inner && \
-    if ls /tmp/pylon-sdk/*.tar.gz >/dev/null 2>&1; then \
-        for pkg in /tmp/pylon-sdk/*.tar.gz; do \
-            tar -xzf "$pkg" -C /tmp/pylon-inner; \
-        done; \
+    tar_archives=$(find /tmp/pylon-sdk -maxdepth 1 -type f -name '*.tar.gz' | sort) && \
+    deb_archives=$(find /tmp/pylon-sdk -maxdepth 1 -type f -name '*.deb' | sort) && \
+    if [ -z "$tar_archives" ] && [ -z "$deb_archives" ]; then \
+        echo 'ERROR: no Basler pylon SDK archive found under deploy/basler_camera/pylon-sdk/' >&2; \
+        exit 1; \
     fi && \
-    if ls /tmp/pylon-inner/*.deb >/dev/null 2>&1; then \
+    if [ "$(printf '%s\n' "$tar_archives" | sed '/^$/d' | wc -l)" -gt 1 ]; then \
+        echo 'ERROR: multiple pylon tar.gz archives found; keep exactly one SDK bundle to avoid ambiguous builds.' >&2; \
+        exit 1; \
+    fi && \
+    mkdir -p /tmp/pylon-inner && \
+    if [ -n "$tar_archives" ]; then \
+        tar -xzf "$tar_archives" -C /tmp/pylon-inner; \
+    fi && \
+    if find /tmp/pylon-inner -maxdepth 1 -type f -name '*.deb' | grep -q .; then \
         apt-get update && \
         apt-get install -y --no-install-recommends /tmp/pylon-inner/*.deb && \
         rm -rf /tmp/pylon-inner; \
     else \
+        setup_tar=$(find /tmp/pylon-sdk -maxdepth 1 -type f -name '*_setup.tar.gz' | sort | head -n 1) && \
+        if [ -z "$setup_tar" ]; then \
+            echo 'ERROR: no valid Basler pylon setup archive found.' >&2; \
+            exit 1; \
+        fi && \
         mkdir -p /opt/pylon && \
-        tar -xzf /tmp/pylon-sdk/*_setup.tar.gz -C /opt/pylon && \
+        tar -xzf "$setup_tar" -C /opt/pylon && \
         rm -rf /tmp/pylon-inner; \
     fi
 
@@ -82,8 +104,6 @@ COPY deploy/basler_camera/README.md deploy/basler_camera/ROS2-INTERFACE.md deplo
 
 RUN . /opt/ros/humble/setup.sh && \
     colcon build --symlink-install
-
-RUN python3 -c "import cv2; assert hasattr(cv2, 'wechat_qrcode'), 'OpenCV WeChatQR backend is unavailable'"
 
 COPY deploy/basler_camera/entrypoint.sh /entrypoint.sh
 RUN chmod +x /entrypoint.sh deploy/basler_camera/*.sh

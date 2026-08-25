@@ -108,7 +108,7 @@ if [[ "${*}" == *"vision_pipeline.launch.py"* ]]; then
       startup_user_set:="${CAMERA_STARTUP_USER_SET_2:-Default}"
       scanner_ip:="${SCANNER_IP_2:-${SCANNER_IP:-172.31.0.91}}"
       scanner_port:="${SCANNER_PORT_2:-${SCANNER_PORT:-9004}}"
-      reconnect_interval_s:="${RECONNECT_INTERVAL_S:-5.0}"
+      reconnect_interval_s:="${RECONNECT_INTERVAL_S_2:-${RECONNECT_INTERVAL_S:-5.0}}"
       enable_apriltag:="${ENABLE_APRILTAG_2:-true}"
       enable_qrcode:="${ENABLE_QRCODE_2:-true}"
       enable_keyence:="${ENABLE_KEYENCE_2:-true}"

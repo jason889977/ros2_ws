@@ -37,7 +37,7 @@ ros2 topic echo /apriltag/transform --once
 ## 4. TF2 和 RViz
 
 ```bash
-ros2 run tf2_ros tf2_echo basler_aca2500_106611_18 tag36h11:3
+  ros2 run tf2_ros tf2_echo basler_aca2500_106611_18 my_camera/tag36h11:3
 ```
 
 独立调试 launch 下，RViz 图像应选择 `/my_camera/pylon_ros2_camera_node/image_raw`，图像 QoS 设为 `Best Effort`；TF/位姿使用 `/apriltag/transform` 和 `/apriltag/pose`。统一 pipeline 下则使用 `/my_camera/apriltag/transform` 和 `/my_camera/apriltag/pose`，标签子 frame 为 `my_camera/tag36h11:3`。
