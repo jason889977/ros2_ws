@@ -74,6 +74,24 @@ cp deploy/basler_camera/.env.example deploy/basler_camera/.env
 
 ## 5. 启动和停止
 
+### 5.1 清理宿主机残留进程（必做）
+
+容器使用 `network_mode: host`，与宿主机共享 DDS 网络命名空间。如果宿主机上存在残留的 ROS 2 进程（如先前裸机运行的 `vision_pipeline`、`component_container_mt` 等），DDS 发现会将组件加载请求路由到已失效的旧容器，导致新容器的 pylon 相机组件和 AprilTag 组件无法加载，`camera_info` 话题无数据，容器最终因启动超时退出。
+
+entrypoint 的 `_cleanup_stale` 函数仅在容器自身的 PID 命名空间内清理，无法看到宿主机进程。因此在启动容器前，必须先在宿主机上清理：
+
+```bash
+pkill -f "component_container_mt|web_dashboard|aprilgrid_calibration_server|apriltag_pose_reader|vision_status_aggregator|event_logger"
+```
+
+如果此前使用 `ros2 launch` 在裸机上运行过流水线，还需确保对应进程已终止：
+
+```bash
+pgrep -af "ros2 launch|vision_pipeline"
+```
+
+### 5.2 启动
+
 ```bash
 docker compose --env-file deploy/basler_camera/.env \
   -f deploy/basler_camera/docker-compose.yml up -d
