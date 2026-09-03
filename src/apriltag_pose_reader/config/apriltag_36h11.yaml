@@ -1,0 +1,26 @@
+apriltag:
+  ros__parameters:
+    image_transport: raw
+    # Subscribe with BEST_EFFORT (sensor_data) to match the camera driver QoS.
+    # The default 'default' profile relies on Fast-DDS resolving system-default
+    # readers to best-effort, which silently breaks under other RMWs.
+    qos_profile: sensor_data
+    family: 36h11
+    size: 0.05
+    profile: false
+    max_hamming: 0
+    pose_estimation_method: pnp
+    detector:
+      threads: 1
+      decimate: 2.0
+      blur: 0.0
+      refine: true
+      sharpening: 0.25
+      debug: false
+    calibration_board:
+      rows: 4
+      cols: 3
+      tag_size_m: 0.05
+      tag_spacing_m: 0.01
+      tag_family: tag36h11
+      notes: "AprilGrid board: 4x3 tags, 50mm tag edge, 10mm gap between tag borders, family tag36h11."

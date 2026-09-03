@@ -1,0 +1,15 @@
+services:
+  basler_camera:
+    volumes:
+      - ../../src:/opt/ros2_ws/src:ro
+      - ../../scripts:/opt/ros2_ws/scripts:ro
+    environment:
+      RCUTILS_CONSOLE_OUTPUT_FORMAT: '[{severity}][{name}]: {message}'
+      RCUTILS_LOGGING_USE_TIMESTAMP: 'true'
+    command:
+      - ros2
+      - launch
+      - industrial_vision_bringup
+      - vision_pipeline.launch.py
+      - event_log_dir:=/var/log/vision
+      - archive_dir:=/tmp/vision_archive

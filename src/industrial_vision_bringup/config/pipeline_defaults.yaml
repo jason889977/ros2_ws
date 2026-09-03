@@ -1,0 +1,39 @@
+# Default parameters for the industrial vision pipeline.
+#
+# Organized by domain:
+#   1. Camera core        — camera_id, frame, config, mtu
+#   2. Detection modules  — AprilTag, Keyence toggles & tuning
+#   3. Observability      — web dashboard, event logger, status aggregator
+#
+# Usage:
+#   ros2 launch industrial_vision_bringup vision_pipeline.launch.py \
+#       params_file:=config/pipeline_defaults.yaml
+#
+# Launch arguments still override YAML values at every level.
+
+/**/apriltag_pose_reader:
+  ros__parameters:
+    lookup_rate_hz: 0.0
+    publish_all_tags: true
+    subscribe_detections: true
+    publish_detection_logs: false
+
+/**/vision_status_aggregator:
+  ros__parameters:
+    publish_rate_hz: 1.0
+    diagnostic_timeout_s: 5.0
+    miss_scan_threshold_s: 60.0
+
+/**/event_logger:
+  ros__parameters:
+    max_file_size_mb: 50
+    max_file_count: 5
+
+/**/web_dashboard:
+  ros__parameters:
+    web_port: 8080
+
+/**/pylon_ros2_camera_node:
+  ros__parameters:
+    enable_status_publisher: true
+    enable_current_params_publisher: false

@@ -1,0 +1,24 @@
+[tool.pytest.ini_options]
+minversion = "6.0"
+testpaths = [
+    "src/industrial_vision_bringup/test",
+    "src/keyence_sr_wrapper/test",
+    "src/vision_core/test",
+    "src/aprilgrid_calibration/test",
+    "src/handeye_calibration/test",
+    "src/vision_dashboard/test",
+    "src/vision_nodes/test",
+]
+addopts = "--tb=short"
+
+[tool.coverage.run]
+source = [
+    "src/industrial_vision_bringup/industrial_vision_bringup",
+    "src/keyence_sr_wrapper/keyence_sr_wrapper",
+    "src/vision_core/vision_core",
+    "src/aprilgrid_calibration/aprilgrid_calibration",
+    "src/handeye_calibration/handeye_calibration",
+    "src/vision_dashboard/vision_dashboard",
+    "src/vision_nodes/vision_nodes",
+]
+omit = ["*/test_*", "*/__pycache__/*"]

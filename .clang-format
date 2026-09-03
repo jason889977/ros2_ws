@@ -1,0 +1,25 @@
+# C++ formatting for this repository.
+#
+# Based on the ROS 2 / Google C++ style. Format a file with:
+#   clang-format -i <file>
+#
+# The legacy vendor camera driver (pylon_ros2_camera_component) predates
+# this config; format new code with it and migrate the driver gradually.
+Language: Cpp
+BasedOnStyle: Google
+Standard: c++17
+AccessModifierOffset: -4
+AlignAfterOpenBracket: Align
+AlignConsecutiveAssignments: false
+AlignTrailingComments: true
+AllowShortFunctionsOnASingleLine: Inline
+AlwaysBreakTemplateDeclarations: true
+ColumnLimit: 100
+ConstructorInitializerIndentWidth: 4
+IndentWidth: 4
+TabWidth: 4
+UseTab: Never
+IncludeBlocks: Preserve
+SortIncludes: false
+DerivePointerAlignment: false
+PointerAlignment: Left

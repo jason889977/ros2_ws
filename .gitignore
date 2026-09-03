@@ -1,0 +1,37 @@
+# ROS 2 colcon build artifacts
+build/
+install/
+log/
+
+# Common temporary files
+*.log
+*.tmp
+*.swp
+*.swo
+*~
+
+# Python cache
+__pycache__/
+*.pyc
+.pytest_cache/
+
+# VS Code local state
+.vscode/
+
+# Deployment secrets and runtime data
+.env
+deploy/basler_camera/data/
+*.caffemodel
+
+# Python virtual environment
+.venv/
+
+# Local AI tool configs
+.qwen/
+.trae/
+
+# Machine-specific calibration outputs
+handeye_calibration.yaml
+
+# Large binary SDK packages (503MB, exceeds GitHub 100MB limit; download manually)
+deploy/basler_camera/pylon-sdk/*.tar.gz

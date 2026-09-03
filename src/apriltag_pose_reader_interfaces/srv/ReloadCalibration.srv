@@ -1,0 +1,8 @@
+# Request the hand-eye static TF broadcaster to reload its calibration
+# from a (possibly updated) YAML file and re-publish the static transform.
+
+# Path to the hand-eye calibration YAML (OpenCV FileStorage format).
+string calibration_file
+---
+bool success
+string message

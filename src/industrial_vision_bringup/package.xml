@@ -1,0 +1,40 @@
+<?xml version="1.0"?>
+<?xml-model href="http://download.ros.org/schema/package_format3.xsd" schematypens="http://www.w3.org/2001/XMLSchema"?>
+<package format="3">
+  <name>industrial_vision_bringup</name>
+  <version>0.1.0</version>
+  <description>Unified Basler, AprilTag and Keyence vision pipeline bringup.</description>
+  <maintainer email="jason889977@users.noreply.github.com">jason889977</maintainer>
+  <license>BSD-3-Clause</license>
+
+  <exec_depend>ament_index_python</exec_depend>
+  <exec_depend>diagnostic_msgs</exec_depend>
+  <exec_depend>apriltag_ros</exec_depend>
+  <exec_depend>apriltag_pose_reader</exec_depend>
+  <exec_depend>geometry_msgs</exec_depend>
+  <exec_depend>image_proc</exec_depend>
+  <exec_depend>image_transport</exec_depend>
+  <exec_depend>keyence_sr_wrapper</exec_depend>
+  <exec_depend>launch</exec_depend>
+  <exec_depend>launch_ros</exec_depend>
+  <exec_depend>pylon_ros2_camera_component</exec_depend>
+  <exec_depend>pylon_ros2_camera_interfaces</exec_depend>
+  <exec_depend>pylon_ros2_camera_wrapper</exec_depend>
+  <exec_depend>rclcpp_components</exec_depend>
+  <exec_depend>rclpy</exec_depend>
+  <exec_depend>vision_core</exec_depend>
+  <exec_depend>vision_dashboard</exec_depend>
+  <exec_depend>vision_nodes</exec_depend>
+  <exec_depend>handeye_calibration</exec_depend>
+  <exec_depend>sensor_msgs</exec_depend>
+  <exec_depend>std_msgs</exec_depend>
+  <exec_depend>std_srvs</exec_depend>
+
+  <test_depend>python3-pytest</test_depend>
+  <test_depend>ament_lint_auto</test_depend>
+  <test_depend>ament_lint_common</test_depend>
+
+  <export>
+    <build_type>ament_python</build_type>
+  </export>
+</package>

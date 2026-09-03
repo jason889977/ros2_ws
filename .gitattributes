@@ -1,0 +1,2 @@
+deploy/basler_camera/pylon-sdk/*.tar.gz filter=lfs diff=lfs merge=lfs -text
+deploy/basler_camera/pylon-sdk/*.deb filter=lfs diff=lfs merge=lfs -text

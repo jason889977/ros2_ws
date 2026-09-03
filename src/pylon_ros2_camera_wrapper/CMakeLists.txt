@@ -1,0 +1,144 @@
+cmake_minimum_required(VERSION 3.22)
+
+# Suppress CMP0144 warning on newer CMake while keeping Humble/Jammy compatibility.
+if(POLICY CMP0144)
+  cmake_policy(SET CMP0144 NEW)
+endif()
+
+project(pylon_ros2_camera_wrapper)
+
+# Default to C++17
+if(NOT CMAKE_CXX_STANDARD)
+  set(CMAKE_CXX_STANDARD 17)
+endif()
+
+if(CMAKE_COMPILER_IS_GNUCXX OR CMAKE_CXX_COMPILER_ID MATCHES "Clang")
+  add_compile_options(-Wall -Wextra -Wpedantic)
+endif()
+
+# if CMAKE_BUILD_TYPE is not specified, take 'Release' as default
+if(NOT CMAKE_BUILD_TYPE)
+  set(CMAKE_BUILD_TYPE Release)
+endif()
+
+if(CMAKE_BUILD_TYPE MATCHES Release)
+   #message(" * Release Mode")
+   add_compile_options(-Wno-deprecated-declarations)
+endif()
+
+if(CMAKE_BUILD_TYPE MATCHES RelWithDebInfo)
+   #message(" * Release with Debug Info Mode")
+   add_compile_options(-Wno-deprecated-declarations)
+endif()
+
+if(CMAKE_BUILD_TYPE MATCHES Debug)
+   message(" * Debug Mode")
+endif()
+
+find_package(ament_cmake REQUIRED)
+find_package(rclcpp REQUIRED)
+find_package(rclcpp_components REQUIRED)
+find_package(rcutils REQUIRED)
+find_package(pylon_ros2_camera_component REQUIRED)
+
+set(CAMERA_WRAPPER_DEPENDENCIES
+	rclcpp
+	rclcpp_components
+	rcutils
+	pylon_ros2_camera_component
+)
+
+add_executable(${PROJECT_NAME}
+	${CMAKE_CURRENT_SOURCE_DIR}/src/${PROJECT_NAME}.cpp
+)
+
+ament_target_dependencies(${PROJECT_NAME}
+	${CAMERA_WRAPPER_DEPENDENCIES}
+)
+
+### installation
+
+install(TARGETS
+			${PROJECT_NAME}
+	ARCHIVE DESTINATION lib
+	LIBRARY DESTINATION lib
+	RUNTIME DESTINATION lib/${PROJECT_NAME}
+)
+
+# Install the runtime camera-profile and generated calibration YAML files
+# under the package share directory so package://pylon_ros2_camera_wrapper/config/... resolves.
+install(DIRECTORY config/
+		DESTINATION share/${PROJECT_NAME}/config
+		FILES_MATCHING
+		PATTERN "*.yaml"
+    PATTERN "*.yml"
+)
+
+install(DIRECTORY launch
+		DESTINATION share/${PROJECT_NAME}
+		PATTERN "__pycache__" EXCLUDE
+)
+
+if(BUILD_TESTING)
+
+  option(PYLON_WRAPPER_MIN_RELEASE_LINT
+    "Skip heavy non-runtime lint checks for minimal release validation" ON)
+  option(PYLON_BUILD_MANUAL_TOOLS
+    "Build manual camera Action client tools" OFF)
+
+  if(PYLON_BUILD_MANUAL_TOOLS)
+    find_package(cv_bridge REQUIRED)
+    find_package(image_geometry REQUIRED)
+
+    if(cv_bridge_VERSION VERSION_GREATER_EQUAL 3.3.0)
+      add_compile_definitions(cv_bridge_HPP)
+    endif()
+
+    if(image_geometry_VERSION VERSION_GREATER_EQUAL 3.3.0)
+      add_compile_definitions(image_geometry_HPP)
+    endif()
+
+    set(CAMERA_TEST_DEPENDENCIES
+      ${CAMERA_WRAPPER_DEPENDENCIES}
+      cv_bridge
+      image_geometry
+    )
+
+    ### manual tool
+
+    add_library(action_client_test_grab_images SHARED
+      ${CMAKE_CURRENT_SOURCE_DIR}/tools/grab_images_action_client.cpp
+    )
+
+    target_compile_definitions(action_client_test_grab_images
+      PRIVATE "TEST_GRAB_IMAGES_ACTION_CLIENT_BUILDING_DLL")
+
+    ament_target_dependencies(action_client_test_grab_images
+      ${CAMERA_TEST_DEPENDENCIES}
+    )
+
+    rclcpp_components_register_node(action_client_test_grab_images
+      PLUGIN "pylon_ros2_camera::TestGrabImagesActionClient"
+      EXECUTABLE test_grab_images_action_client
+    )
+
+    install(TARGETS
+          action_client_test_grab_images
+      ARCHIVE DESTINATION lib
+      LIBRARY DESTINATION lib
+      RUNTIME DESTINATION lib/${PROJECT_NAME}
+    )
+  endif()
+
+  find_package(ament_lint_auto REQUIRED)
+  if(PYLON_WRAPPER_MIN_RELEASE_LINT)
+    set(ament_cmake_copyright_FOUND TRUE)
+    set(ament_cmake_cpplint_FOUND TRUE)
+    set(ament_cmake_lint_cmake_FOUND TRUE)
+    set(ament_cmake_uncrustify_FOUND TRUE)
+    set(ament_cmake_xmllint_FOUND TRUE)
+  endif()
+  ament_lint_auto_find_test_dependencies()
+endif()
+
+ament_package()

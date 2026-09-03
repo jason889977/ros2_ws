@@ -1,0 +1,25 @@
+# Local-only hooks: no network access needed at install time.
+#   pip install pre-commit && pre-commit install
+repos:
+  - repo: local
+    hooks:
+      - id: flake8
+        name: flake8 (Python sources)
+        entry: python3 -m flake8 --max-line-length=100
+        language: system
+        types: [python]
+      - id: bash-syntax
+        name: bash -n (shell scripts)
+        entry: bash -n
+        language: system
+        files: \.(sh|bash)$
+      - id: js-syntax
+        name: node --check (dashboard JS)
+        entry: node --check
+        language: system
+        files: \.js$
+      - id: yaml-syntax
+        name: YAML parse check
+        entry: python3 -c 'import sys, yaml; [yaml.safe_load(open(f)) for f in sys.argv[1:]]'
+        language: system
+        files: \.(yaml|yml)$

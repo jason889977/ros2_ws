@@ -1,0 +1,244 @@
+name: Build & Test
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  schedule:
+    # Nightly build (02:00 Beijing time) to catch dependency drift.
+    - cron: '0 18 * * *'
+
+jobs:
+  build-and-test:
+    runs-on: ubuntu-22.04
+    container: swr.cn-north-4.myhuaweicloud.com/ddn-k8s/docker.io/ros:humble-ros-base
+    defaults:
+      run:
+        shell: bash
+    env:
+      PYLON_ROOT: /opt/pylon
+      GENICAM_GENTL64_PATH: /opt/pylon/lib/gentlproducer/gtl
+      LD_LIBRARY_PATH: /opt/pylon/lib
+      PATH: /opt/pylon/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+      PYLON_SDK_SEARCH_PATHS: |
+        /opt/pylon
+        /opt/pylon-sdk
+        /tmp/pylon-installer
+        ${{ github.workspace }}/deploy/basler_camera/pylon-sdk
+        ${{ github.workspace }}/ros2_ws/deploy/basler_camera/pylon-sdk
+      PYTEST_DISABLE_PLUGIN_AUTOLOAD: "1"
+      # Single source of truth for the pytest directory list below.
+      PYTEST_DIRS: >-
+        src/keyence_sr_wrapper/test/
+        src/vision_core/test/
+        src/aprilgrid_calibration/test/
+        src/handeye_calibration/test/
+        src/vision_dashboard/test/
+        src/vision_nodes/test/
+      COVERAGE_PACKAGES: >-
+        vision_core
+        vision_nodes
+        vision_dashboard
+        keyence_sr_wrapper
+        handeye_calibration
+        aprilgrid_calibration
+        industrial_vision_bringup
+        apriltag_pose_reader
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Restore ccache
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/ccache
+          key: ccache-${{ runner.os }}-${{ github.sha }}
+          restore-keys: |
+            ccache-${{ runner.os }}-
+
+      - name: Install dependencies and system packages
+        run: |
+          apt-get update
+          apt-get install -y --no-install-recommends \
+            git git-lfs ccache nodejs \
+            libusb-1.0-0-dev libudev-dev libyaml-cpp-dev libopencv-dev \
+            python3-pytest python3-pytest-cov python3-opencv python3-numpy python3-yaml python3-apriltag \
+            python3-fastapi python3-httpx python3-requests \
+            ros-humble-cv-bridge ros-humble-sensor-msgs ros-humble-std-msgs \
+            ros-humble-std-srvs ros-humble-tf2-ros ros-humble-tf2-msgs \
+            ros-humble-geometry-msgs ros-humble-apriltag ros-humble-apriltag-msgs ros-humble-apriltag-ros \
+            ros-humble-camera-info-manager ros-humble-image-geometry ros-humble-image-proc \
+            ros-humble-image-transport ros-humble-image-transport-plugins \
+            ros-humble-compressed-image-transport \
+            ros-humble-pcl-ros ros-humble-rclcpp-components \
+            ros-humble-diagnostic-msgs ros-humble-diagnostic-updater \
+            ros-humble-rclpy ros-humble-ament-copyright \
+            ros-humble-ament-flake8 ros-humble-ament-pep257
+
+      - name: Fetch Git LFS files
+        run: |
+          git config --global --add safe.directory "${GITHUB_WORKSPACE:-$PWD}" || true
+          git lfs install
+          git lfs pull
+
+      - name: Detect and install Basler Pylon SDK
+        id: pylon
+        run: |
+          set -e
+          mkdir -p /tmp/pylon-installer
+          export HAS_PYLON=false
+
+          candidate_roots=()
+          if [ -n "${PYLON_ROOT:-}" ]; then
+            candidate_roots+=("${PYLON_ROOT}")
+          fi
+          if [ -n "${Pylon_ROOT:-}" ]; then
+            candidate_roots+=("${Pylon_ROOT}")
+          fi
+          while IFS= read -r candidate; do
+            [ -n "$candidate" ] && candidate_roots+=("$candidate")
+          done <<< "${PYLON_SDK_SEARCH_PATHS:-}"
+          candidate_roots+=(
+            "$GITHUB_WORKSPACE/deploy/basler_camera/pylon-sdk"
+            "$GITHUB_WORKSPACE/ros2_ws/deploy/basler_camera/pylon-sdk"
+            "$GITHUB_WORKSPACE/deploy/basler_camera"
+            "$GITHUB_WORKSPACE/ros2_ws/deploy/basler_camera"
+            "/opt/pylon"
+            "/opt/pylon-sdk"
+          )
+
+          SDK_DIR=""
+          for candidate in "${candidate_roots[@]}"; do
+            if [ -n "$candidate" ] && [ -d "$candidate" ]; then
+              SDK_DIR="$candidate"
+              break
+            fi
+          done
+
+          if [ -z "$SDK_DIR" ]; then
+            echo "::warning::未找到 Basler Pylon SDK，跳过相机驱动构建。"
+            echo "无 SDK 时继续执行不依赖硬件 SDK 的构建、测试和脚本检查。"
+            echo "HAS_PYLON=false" >> "$GITHUB_ENV"
+            exit 0
+          fi
+
+          echo "SDK_DIR=$SDK_DIR"
+          if find "$SDK_DIR" -maxdepth 1 -type f -name '*.deb' | grep -q .; then
+            echo "Installing Pylon deb packages from $SDK_DIR..."
+            find "$SDK_DIR" -maxdepth 1 -type f -name '*.deb' -exec cp {} /tmp/pylon-installer/ \;
+            apt-get update
+            apt-get install -y --no-install-recommends /tmp/pylon-installer/*.deb
+          else
+            setup_tar=$(find "$SDK_DIR" -maxdepth 2 -type f \( -name '*_setup.tar.gz' -o -name 'pylon*.tar.gz' -o -name '*.tar.gz' \) 2>/dev/null | sort | head -n 1)
+            if [ -z "$setup_tar" ]; then
+              echo "::warning::未找到可用的 Pylon 安装包，跳过相机驱动构建。"
+              echo "HAS_PYLON=false" >> "$GITHUB_ENV"
+              exit 0
+            fi
+            echo "Extracting $setup_tar..."
+            tar -xzf "$setup_tar" -C /tmp/pylon-installer
+            if find /tmp/pylon-installer -maxdepth 1 -type f -name '*.deb' | grep -q .; then
+              apt-get update
+              apt-get install -y --no-install-recommends /tmp/pylon-installer/*.deb
+            else
+              mkdir -p /opt/pylon
+              tar -xzf "$setup_tar" -C /opt/pylon
+            fi
+          fi
+
+          export HAS_PYLON=true
+          echo "HAS_PYLON=true" >> "$GITHUB_ENV"
+          echo "PYLON_ROOT=${PYLON_ROOT:-$SDK_DIR}" >> "$GITHUB_ENV"
+          echo "GENICAM_GENTL64_PATH=${PYLON_ROOT:-$SDK_DIR}/lib/gentlproducer/gtl" >> "$GITHUB_ENV"
+          echo "LD_LIBRARY_PATH=${PYLON_ROOT:-$SDK_DIR}/lib:${LD_LIBRARY_PATH:-}" >> "$GITHUB_ENV"
+          echo "${PYLON_ROOT:-$SDK_DIR}/bin" >> "$GITHUB_PATH"
+          rm -rf /tmp/pylon-installer
+
+      - name: Configure environment variables
+        if: env.HAS_PYLON == 'true'
+        run: |
+          PYLON_DIR=$(find /opt -maxdepth 1 -type d -name 'pylon*' | sort -V | tail -n 1)
+          if [ -z "$PYLON_DIR" ] || [ ! -d "$PYLON_DIR" ]; then
+            PYLON_DIR="/opt/pylon"
+          fi
+          echo "Using Pylon SDK at: $PYLON_DIR"
+          echo "PYLON_ROOT=$PYLON_DIR" >> "$GITHUB_ENV"
+          echo "GENICAM_GENTL64_PATH=$PYLON_DIR/lib/gentlproducer/gtl" >> "$GITHUB_ENV"
+          echo "LD_LIBRARY_PATH=$PYLON_DIR/lib:${LD_LIBRARY_PATH:-}" >> "$GITHUB_ENV"
+          echo "$PYLON_DIR/bin" >> "$GITHUB_PATH"
+
+      - name: Build workspace
+        run: |
+          . /opt/ros/humble/setup.bash
+          # ccache speeds up rebuilds; the cache step above persists it.
+          CMAKE_CC_ARGS="-DCMAKE_C_COMPILER_LAUNCHER=ccache -DCMAKE_CXX_COMPILER_LAUNCHER=ccache"
+          if [[ "${HAS_PYLON:-false}" == "true" ]]; then
+            colcon build --symlink-install --cmake-args $CMAKE_CC_ARGS \
+              --packages-up-to industrial_vision_bringup
+          else
+            colcon build --symlink-install --cmake-args $CMAKE_CC_ARGS \
+              --packages-select \
+              apriltag_pose_reader_interfaces \
+              vision_core vision_dashboard aprilgrid_calibration \
+              handeye_calibration vision_nodes \
+              pylon_ros2_camera_interfaces apriltag_pose_reader \
+              keyence_sr_wrapper \
+              industrial_vision_bringup
+          fi
+
+      - name: Validate scripts and Python sources
+        run: |
+          bash -n deploy/basler_camera/entrypoint.sh deploy/basler_camera/healthcheck.sh
+          python3 -m compileall -q src scripts
+          cmp -s \
+            src/pylon_ros2_camera_wrapper/config/aca2500_106611_18.yaml \
+            deploy/basler_camera/config/aca2500_106611_18.yaml
+          # Frontend JS syntax check (catches broken edits before deploy).
+          find src -name '*.js' -print0 | xargs -0 -r -n1 node --check
+
+      - name: Run unit tests
+        run: |
+          . /opt/ros/humble/setup.bash
+          . install/setup.bash
+          if [[ "${HAS_PYLON:-false}" == "true" ]]; then
+            python3 -m pytest $PYTEST_DIRS src/industrial_vision_bringup/test/ -v \
+              -p pytest_cov --cov=$COVERAGE_PACKAGES \
+              --cov-report=term --cov-report=xml:coverage.xml
+          else
+            python3 -m pytest $PYTEST_DIRS -v \
+              -p pytest_cov --cov=$COVERAGE_PACKAGES \
+              --cov-report=term --cov-report=xml:coverage.xml
+          fi
+
+      - name: Upload coverage report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-report
+          path: coverage.xml
+          if-no-files-found: warn
+
+      - name: Lint and test packages (no camera SDK)
+        if: env.HAS_PYLON != 'true'
+        run: |
+          . /opt/ros/humble/setup.bash
+          . install/setup.bash
+          # These packages (pure-Python lints) do not need the Pylon SDK;
+          # keep them covered even when the camera driver was skipped.
+          colcon test --packages-select \
+            apriltag_pose_reader_interfaces \
+            vision_core vision_dashboard aprilgrid_calibration \
+            handeye_calibration vision_nodes \
+            pylon_ros2_camera_interfaces apriltag_pose_reader \
+            keyence_sr_wrapper \
+            --event-handlers console_cohesion+
+          colcon test-result --verbose
+
+      - name: Lint and test packages (with camera SDK)
+        if: env.HAS_PYLON == 'true'
+        run: |
+          . /opt/ros/humble/setup.bash
+          . install/setup.bash
+          colcon test --packages-up-to industrial_vision_bringup \
+            --event-handlers console_cohesion+
+          colcon test-result --verbose

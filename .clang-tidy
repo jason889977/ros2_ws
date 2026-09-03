@@ -1,0 +1,19 @@
+# Static analysis for this repository.
+#
+# Run on a file with:
+#   clang-tidy <file> -- -std=c++17
+#
+# Checks start conservative (bug-prone patterns, not style) so that the
+# legacy vendor driver code is not buried in noise. Style rules live in
+# .clang-format instead.
+Checks: >
+  bugprone-*,
+  performance-*,
+  modernize-use-nullptr,
+  modernize-use-override,
+  readability-redundant-*,
+  -bugprone-easily-swappable-parameters,
+  -readability-function-cognitive-complexity
+WarningsAsErrors: ''
+HeaderFilterRegex: 'src/.*'
+FormatStyle: file

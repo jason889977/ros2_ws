@@ -1,0 +1,59 @@
+services:
+  basler_camera:
+    image: ${BASLER_IMAGE:-basler_camera_20260819_v2.0}
+    container_name: ${BASLER_CONTAINER_NAME:-basler_camera}
+    network_mode: host
+    restart: unless-stopped
+    environment:
+      ROS_DOMAIN_ID: ${ROS_DOMAIN_ID:-0}
+      RMW_IMPLEMENTATION: ${RMW_IMPLEMENTATION:-rmw_fastrtps_cpp}
+      # Camera 1
+      CAMERA_ID: ${CAMERA_ID:-my_camera}
+      CAMERA_CONFIG_FILE: ${CAMERA_CONFIG_FILE:-/opt/ros2_ws/deploy/basler_camera/config/aca2500_106611_18.yaml}
+      CAMERA_FRAME: ${CAMERA_FRAME:-basler_aca2500_106611_18}
+      CAMERA_MTU_SIZE: ${CAMERA_MTU_SIZE:-1500}
+      CAMERA_STARTUP_USER_SET: ${CAMERA_STARTUP_USER_SET:-Default}
+      CAMERA_RESPAWN: ${CAMERA_RESPAWN:-true}
+      CAMERA_STARTUP_TIMEOUT_S: ${CAMERA_STARTUP_TIMEOUT_S:-120}
+      SCANNER_IP: ${SCANNER_IP:-172.31.0.91}
+      SCANNER_PORT: ${SCANNER_PORT:-9004}
+      RECONNECT_INTERVAL_S: ${RECONNECT_INTERVAL_S:-5.0}
+      # Per-camera hardware overrides (0/empty = use camera YAML default)
+      BINNING_X: ${BINNING_X:-0}
+      BINNING_Y: ${BINNING_Y:-0}
+      APRILTAG_IDS: ${APRILTAG_IDS:-}
+      APRILTAG_SIZE: ${APRILTAG_SIZE:-0.0}
+      # Per-module enable flags (camera 1)
+      ENABLE_APRILTAG: ${ENABLE_APRILTAG:-true}
+      ENABLE_KEYENCE: ${ENABLE_KEYENCE:-true}
+      ENABLE_WEB_DASHBOARD: ${ENABLE_WEB_DASHBOARD:-true}
+      ARCHIVE_DIR: ${ARCHIVE_DIR:-/var/lib/vision/archive}
+      EVENT_LOG_DIR: ${EVENT_LOG_DIR:-/var/log/vision}
+      CALIBRATION_DIR: ${CALIBRATION_DIR:-/var/lib/vision/calibration}
+      HANDEYE_CALIBRATION_FILE: ${HANDEYE_CALIBRATION_FILE:-}
+      WORLD_FRAME: ${WORLD_FRAME:-}
+      BASE_FRAME: ${BASE_FRAME:-}
+      WEB_PORT: ${WEB_PORT:-8080}
+    command: ["ros2", "launch", "industrial_vision_bringup", "vision_pipeline.launch.py"]
+    devices: []
+    volumes:
+      - ./config:/opt/ros2_ws/deploy/basler_camera/config:ro
+      - ./data/archive:/var/lib/vision/archive
+      - ./data/calibration:/var/lib/vision/calibration
+      - ./data/events:/var/log/vision
+    # 资源限制：防止单容器占满工控机资源
+    mem_limit: ${MEM_LIMIT:-4g}
+    memswap_limit: ${MEM_SWAP_LIMIT:-4g}
+    cpus: ${CPUS_LIMIT:-4.0}
+    # 日志轮转：防止日志占满磁盘
+    logging:
+      driver: json-file
+      options:
+        max-size: "${LOG_MAX_SIZE:-50m}"
+        max-file: "${LOG_MAX_FILE:-3}"
+    healthcheck:
+      test: ["CMD-SHELL", "/opt/ros2_ws/deploy/basler_camera/healthcheck.sh"]
+      interval: 15s
+      timeout: 90s
+      retries: 5
+      start_period: 120s

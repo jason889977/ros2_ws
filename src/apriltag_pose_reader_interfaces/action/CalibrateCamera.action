@@ -1,0 +1,66 @@
+# AprilGrid camera intrinsic calibration action.
+#
+# Goal: directory of calibration images + board specification.
+# Result: intrinsic matrix, distortion coefficients, quality report.
+# Feedback: per-image detection progress.
+
+# --- GOAL ---
+
+# Directory containing calibration images (png/jpg/bmp).
+string input_dir
+
+# Directory to store collected images and the output YAML.
+string output_dir
+
+# AprilGrid board specification.
+int32 rows
+int32 cols
+float64 tag_size_m
+float64 tag_spacing_m
+string tag_family
+
+# Filename for the generated camera_calibration.yaml.
+string output_name
+
+# Maximum reprojection error (pixels).  Calibration is rejected if exceeded.
+float64 max_reprojection_error
+
+# Maximum wall-clock time (seconds) for the full calibration.  0 = no limit.
+float64 timeout_s
+
+---
+# --- RESULT ---
+
+bool success
+string message
+
+# Camera intrinsic matrix (3x3, row-major).
+float64[9] camera_matrix
+
+# Distortion coefficients (plumb_bob: k1 k2 p1 p2 k3).
+float64[5] distortion_coefficients
+
+# Image dimensions used for calibration.
+int32 image_width
+int32 image_height
+
+# Number of images that had detectable tags.
+int32 images_used
+
+# Mean reprojection error in pixels (from cv2.calibrateCamera).
+float64 reprojection_error
+
+# Absolute path to the generated YAML file.
+string output_yaml
+
+---
+# --- FEEDBACK ---
+
+# Current phase: "collecting", "detecting", "calibrating", "done".
+string phase
+
+# Number of images processed so far.
+int32 images_processed
+
+# Number of tags detected in the most recent image.
+int32 last_detection_count
